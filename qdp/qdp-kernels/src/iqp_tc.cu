@@ -15,17 +15,13 @@ __device__ double compute_phase_tc(
 ) {
     double phase = 0.0;
     for (unsigned int i = 0; i < num_qubits; ++i) {
-        if ((x >> i) & 1U) {
-            phase += data[i];
-        }
+        phase += data[i] * (double)((x >> i) & 1U);
     }
     if (enable_zz) {
         unsigned int pair_idx = num_qubits;
         for (unsigned int i = 0; i < num_qubits; ++i) {
             for (unsigned int j = i + 1; j < num_qubits; ++j) {
-                if (((x >> i) & 1U) && ((x >> j) & 1U)) {
-                    phase += data[pair_idx];
-                }
+                phase += data[pair_idx] * (double)(((x >> i) & 1U) & ((x >> j) & 1U));
                 pair_idx++;
             }
         }
@@ -151,7 +147,8 @@ extern "C" int launch_iqp_encode_tc(
     if (num_qubits <= FWT_SHARED_MEM_THRESHOLD) {
         // 使用 PR-C 的融合算子
         double norm_factor = 1.0 / (double)state_len;
-        unsigned int data_len = num_qubits; 
+        unsigned int data_len = num_qubits;
+        cudaFuncSetAttribute(iqp_phase_fwt_normalize_tc_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, 65536);
         iqp_phase_fwt_normalize_tc_kernel<<<num_samples, DEFAULT_BLOCK_SIZE, state_len * sizeof(cuDoubleComplex), stream>>>(
             data_batch_d, static_cast<cuDoubleComplex*>(state_batch_d), num_samples, state_len, num_qubits, data_len, enable_zz, norm_factor
         );

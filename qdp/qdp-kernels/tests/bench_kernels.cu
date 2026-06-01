@@ -26,9 +26,12 @@ extern "C" int launch_iqp_encode_tc(
     cudaStream_t stream
 );
 
-int main() {
+int main(int argc, char* argv[]) {
     size_t num_samples = 128; // Reduced batch size for larger qubits to fit memory
-    unsigned int num_qubits = 12; // 12 > 10, triggers AdaptiveGEMM path
+    unsigned int num_qubits = 14; 
+    if (argc > 1) {
+        num_qubits = std::atoi(argv[1]);
+    }
     size_t state_len = 1ULL << num_qubits;
     unsigned int data_len = num_qubits;
     int enable_zz = 0;
