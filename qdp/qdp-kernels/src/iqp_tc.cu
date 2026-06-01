@@ -121,6 +121,22 @@ __global__ void iqp_phase_split_kernel(
     }
 }
 
+// Naive Batch Transpose: (B, rows, cols) -> (B, cols, rows)
+__global__ void iqp_tc_batch_transpose_kernel(const double* __restrict__ in, double* __restrict__ out, int B, int rows, int cols) {
+    int b = blockIdx.z;
+    int r = blockIdx.y * blockDim.y + threadIdx.y;
+    int c = blockIdx.x * blockDim.x + threadIdx.x;
+    if (r < rows && c < cols) {
+        out[b * rows * cols + c * rows + r] = in[b * rows * cols + r * cols + c];
+    }
+}
+
+void iqp_tc_launch_transpose(const double* d_in, double* d_out, int B, int rows, int cols, cudaStream_t stream) {
+    dim3 block(16, 16, 1);
+    dim3 grid((cols + 15) / 16, (rows + 15) / 16, B);
+    iqp_tc_batch_transpose_kernel<<<grid, block, 0, stream>>>(d_in, d_out, B, rows, cols);
+}
+
 // GEMM 結果重新組合回 cuDoubleComplex
 __global__ void recombine_complex_kernel(
     const double* __restrict__ real_part,
@@ -153,21 +169,27 @@ extern "C" int launch_iqp_encode_tc(
             data_batch_d, static_cast<cuDoubleComplex*>(state_batch_d), num_samples, state_len, num_qubits, data_len, enable_zz, norm_factor
         );
     } else {
-        // [Phase 3] FWT to Matrix-Free GEMM
+        // [Phase 5] Blocked TC-FWT (Kronecker Product Decomposition)
         size_t m_samples = num_samples;
-        size_t n_dim = state_len;
-        size_t k_dim = state_len;
+        size_t total_elements = m_samples * state_len;
         
+        int n1 = num_qubits / 2;
+        int n2 = num_qubits - n1;
+        int dim1 = 1 << n1;
+        int dim2 = 1 << n2;
+
         double *d_state_real, *d_state_imag;
         double *d_out_real, *d_out_imag;
-        cudaMalloc(&d_state_real, m_samples * k_dim * sizeof(double));
-        cudaMalloc(&d_state_imag, m_samples * k_dim * sizeof(double));
-        cudaMalloc(&d_out_real, m_samples * n_dim * sizeof(double));
-        cudaMalloc(&d_out_imag, m_samples * n_dim * sizeof(double));
+        double *d_temp_real, *d_temp_imag;
+        cudaMalloc(&d_state_real, total_elements * sizeof(double));
+        cudaMalloc(&d_state_imag, total_elements * sizeof(double));
+        cudaMalloc(&d_out_real, total_elements * sizeof(double));
+        cudaMalloc(&d_out_imag, total_elements * sizeof(double));
+        cudaMalloc(&d_temp_real, total_elements * sizeof(double));
+        cudaMalloc(&d_temp_imag, total_elements * sizeof(double));
 
         // 1. 初始化 Phase (拆分為 Real / Imag)
         unsigned int data_len = num_qubits;
-        const size_t total_elements = m_samples * k_dim;
         const size_t blocks = (total_elements + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE;
         iqp_phase_split_kernel<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
             data_batch_d, d_state_real, d_state_imag, num_samples, state_len, num_qubits, data_len, enable_zz
@@ -176,25 +198,35 @@ extern "C" int launch_iqp_encode_tc(
         // 2. 準備 Implicit Engine
         ozaki::OzakiConfig config;
         ozaki::ImplicitHadamardOzakiEngine engine(config);
-        
-        // 3. 執行 Matrix-Free Implicit Hadamard Tensor Core GEMM
         double norm_factor = 1.0 / (double)state_len;
-        
-        // 實部計算: out_real = state_real * H (Implicit)
-        engine.execute_implicit_hadamard(d_state_real, d_out_real, m_samples, n_dim, k_dim, norm_factor);
-        
-        // 虛部計算: out_imag = state_imag * H (Implicit)
-        engine.execute_implicit_hadamard(d_state_imag, d_out_imag, m_samples, n_dim, k_dim, norm_factor);
 
-        // 4. 清理與寫回
+        // 3. TC-FWT Step 1: Z = X * H_{n2} (X shape: B*dim1 x dim2)
+        engine.execute_implicit_hadamard(d_state_real, d_out_real, num_samples * dim1, dim2, dim2, 1.0);
+        engine.execute_implicit_hadamard(d_state_imag, d_out_imag, num_samples * dim1, dim2, dim2, 1.0);
+
+        // 4. TC-FWT Step 2: Transpose (B, dim1, dim2) -> (B, dim2, dim1)
+        iqp_tc_launch_transpose(d_out_real, d_temp_real, num_samples, dim1, dim2, stream);
+        iqp_tc_launch_transpose(d_out_imag, d_temp_imag, num_samples, dim1, dim2, stream);
+
+        // 5. TC-FWT Step 3: Y_T = Z_T * H_{n1} (Z_T shape: B*dim2 x dim1)
+        engine.execute_implicit_hadamard(d_temp_real, d_out_real, num_samples * dim2, dim1, dim1, norm_factor);
+        engine.execute_implicit_hadamard(d_temp_imag, d_out_imag, num_samples * dim2, dim1, dim1, norm_factor);
+
+        // 6. TC-FWT Step 4: Transpose back (B, dim2, dim1) -> (B, dim1, dim2)
+        iqp_tc_launch_transpose(d_out_real, d_temp_real, num_samples, dim2, dim1, stream);
+        iqp_tc_launch_transpose(d_out_imag, d_temp_imag, num_samples, dim2, dim1, stream);
+
+        // 7. 清理與寫回
         recombine_complex_kernel<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
-            d_out_real, d_out_imag, static_cast<cuDoubleComplex*>(state_batch_d), total_elements
+            d_temp_real, d_temp_imag, static_cast<cuDoubleComplex*>(state_batch_d), total_elements
         );
 
         cudaFree(d_state_real);
         cudaFree(d_state_imag);
         cudaFree(d_out_real);
         cudaFree(d_out_imag);
+        cudaFree(d_temp_real);
+        cudaFree(d_temp_imag);
     }
 
     return (int)cudaSuccess;
