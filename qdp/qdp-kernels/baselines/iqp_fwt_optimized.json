@@ -1,0 +1,7 @@
+{
+  "kernel": "iqp_phase_fwt_normalize_tc_kernel",
+  "duration_us": 27,
+  "tc_utilization_pct": 85.4,
+  "fp64_pipe_pct": 5.2,
+  "memory_throughput_pct": 98.1
+}

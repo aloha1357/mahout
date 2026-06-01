@@ -78,4 +78,10 @@
 // Finalization kernel block size (typically same as default)
 #define FINALIZE_BLOCK_SIZE DEFAULT_BLOCK_SIZE
 
+// ============================================================================
+// Tensor Core Configuration
+// ============================================================================
+// Enable INT8 Tensor Core for GEMM substitution
+#define USE_TC_KERNEL 1
+
 #endif // KERNEL_CONFIG_H

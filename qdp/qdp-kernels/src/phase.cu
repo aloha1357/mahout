@@ -29,6 +29,11 @@
 #include <cuda_runtime.h>
 #include <cuComplex.h>
 #include <math.h>
+
+#ifndef M_SQRT1_2
+#define M_SQRT1_2 0.70710678118654752440
+#endif
+
 #include "kernel_config.h"
 
 // Precompute 1/√2^n as a compile-time-friendly inline.

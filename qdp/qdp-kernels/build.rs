@@ -224,6 +224,8 @@ fn main() {
         .file("src/angle.cu")
         .file("src/validation.cu")
         .file("src/iqp.cu")
+        .file("src/iqp_tc.cu")
+        .file("src/AdaptiveOzaki.cu")
         .file("src/phase.cu")
         .compile("kernels");
 }

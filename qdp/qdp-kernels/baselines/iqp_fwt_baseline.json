@@ -1,0 +1,7 @@
+{
+  "kernel": "fwt_butterfly_batch_kernel",
+  "duration_us": 4200,
+  "tc_utilization_pct": 0.0,
+  "fp64_pipe_pct": 87.3,
+  "memory_throughput_pct": 23.1
+}
