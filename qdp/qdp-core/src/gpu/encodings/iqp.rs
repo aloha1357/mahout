@@ -64,92 +64,17 @@ impl IqpEncoder {
             num_qubits
         }
     }
-}
 
-impl QuantumEncoder for IqpEncoder {
-    fn encode(
-        &self,
-        #[cfg(target_os = "linux")] device: &Arc<CudaDevice>,
-        #[cfg(not(target_os = "linux"))] _device: &Arc<CudaDevice>,
-        data: &[f64],
-        num_qubits: usize,
-    ) -> Result<GpuStateVector> {
-        self.validate_input(data, num_qubits)?;
-        let state_len = 1 << num_qubits;
-
-        #[cfg(target_os = "linux")]
-        {
-            let input_bytes = std::mem::size_of_val(data);
-            let data_gpu = {
-                crate::profile_scope!("GPU::H2D_IqpData");
-                device.htod_sync_copy(data).map_err(|e| {
-                    map_allocation_error(input_bytes, "IQP input upload", Some(num_qubits), e)
-                })?
-            };
-
-            let state_vector = {
-                crate::profile_scope!("GPU::Alloc");
-                GpuStateVector::new(device, num_qubits, Precision::Float64)?
-            };
-
-            let state_ptr = state_vector.ptr_f64().ok_or_else(|| {
-                MahoutError::InvalidInput(
-                    "State vector precision mismatch (expected float64 buffer)".to_string(),
-                )
-            })?;
-
-            let ret = {
-                crate::profile_scope!("GPU::KernelLaunch");
-                unsafe {
-                    qdp_kernels::launch_iqp_encode(
-                        *data_gpu.device_ptr() as *const f64,
-                        state_ptr as *mut c_void,
-                        state_len,
-                        num_qubits as u32,
-                        if self.enable_zz { 1 } else { 0 },
-                        std::ptr::null_mut(),
-                    )
-                }
-            };
-
-            if ret != 0 {
-                return Err(MahoutError::KernelLaunch(format!(
-                    "IQP encoding kernel failed with CUDA error code: {} ({})",
-                    ret,
-                    cuda_error_to_string(ret)
-                )));
-            }
-
-            {
-                crate::profile_scope!("GPU::Synchronize");
-                device.synchronize().map_err(|e| {
-                    MahoutError::Cuda(format!("CUDA device synchronize failed: {:?}", e))
-                })?;
-            }
-
-            Ok(state_vector)
-        }
-
-        #[cfg(not(target_os = "linux"))]
-        {
-            Err(MahoutError::Cuda(
-                "CUDA unavailable (non-Linux stub)".to_string(),
-            ))
-        }
-        }
-        }
-
-        impl IqpEncoder {
-        /// Encode multiple IQP samples using Matrix-Free Implicit Hadamard Tensor Core engine
-        #[cfg(target_os = "linux")]
-        pub fn encode_batch_tc(
+    /// Encode multiple IQP samples using Matrix-Free Implicit Hadamard Tensor Core engine
+    #[cfg(target_os = "linux")]
+    pub fn encode_batch_tc(
         &self,
         device: &Arc<CudaDevice>,
         batch_data: &[f64],
         num_samples: usize,
         sample_size: usize,
         num_qubits: usize,
-        ) -> Result<GpuStateVector> {
+    ) -> Result<GpuStateVector> {
         validate_qubit_count(num_qubits)?;
         let expected_len = self.expected_data_len(num_qubits);
 
@@ -232,22 +157,94 @@ impl QuantumEncoder for IqpEncoder {
         }
 
         Ok(batch_state_vector)
-        }
+    }
 
-        #[cfg(not(target_os = "linux"))]
-        pub fn encode_batch_tc(
+    #[cfg(not(target_os = "linux"))]
+    pub fn encode_batch_tc(
         &self,
         _device: &Arc<CudaDevice>,
         _batch_data: &[f64],
         _num_samples: usize,
         _sample_size: usize,
         _num_qubits: usize,
-        ) -> Result<GpuStateVector> {
+    ) -> Result<GpuStateVector> {
         Err(MahoutError::Cuda(
             "CUDA unavailable (non-Linux stub)".to_string(),
         ))
+    }
+}
+
+impl QuantumEncoder for IqpEncoder {
+    fn encode(
+        &self,
+        #[cfg(target_os = "linux")] device: &Arc<CudaDevice>,
+        #[cfg(not(target_os = "linux"))] _device: &Arc<CudaDevice>,
+        data: &[f64],
+        num_qubits: usize,
+    ) -> Result<GpuStateVector> {
+        self.validate_input(data, num_qubits)?;
+        let state_len = 1 << num_qubits;
+
+        #[cfg(target_os = "linux")]
+        {
+            let input_bytes = std::mem::size_of_val(data);
+            let data_gpu = {
+                crate::profile_scope!("GPU::H2D_IqpData");
+                device.htod_sync_copy(data).map_err(|e| {
+                    map_allocation_error(input_bytes, "IQP input upload", Some(num_qubits), e)
+                })?
+            };
+
+            let state_vector = {
+                crate::profile_scope!("GPU::Alloc");
+                GpuStateVector::new(device, num_qubits, Precision::Float64)?
+            };
+
+            let state_ptr = state_vector.ptr_f64().ok_or_else(|| {
+                MahoutError::InvalidInput(
+                    "State vector precision mismatch (expected float64 buffer)".to_string(),
+                )
+            })?;
+
+            let ret = {
+                crate::profile_scope!("GPU::KernelLaunch");
+                unsafe {
+                    qdp_kernels::launch_iqp_encode(
+                        *data_gpu.device_ptr() as *const f64,
+                        state_ptr as *mut c_void,
+                        state_len,
+                        num_qubits as u32,
+                        if self.enable_zz { 1 } else { 0 },
+                        std::ptr::null_mut(),
+                    )
+                }
+            };
+
+            if ret != 0 {
+                return Err(MahoutError::KernelLaunch(format!(
+                    "IQP encoding kernel failed with CUDA error code: {} ({})",
+                    ret,
+                    cuda_error_to_string(ret)
+                )));
+            }
+
+            {
+                crate::profile_scope!("GPU::Synchronize");
+                device.synchronize().map_err(|e| {
+                    MahoutError::Cuda(format!("CUDA device synchronize failed: {:?}", e))
+                })?;
+            }
+
+            Ok(state_vector)
         }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            Err(MahoutError::Cuda(
+                "CUDA unavailable (non-Linux stub)".to_string(),
+            ))
         }
+    }
 
     /// Encode multiple IQP samples in a single GPU allocation and kernel launch
     #[cfg(target_os = "linux")]
