@@ -43,33 +43,35 @@ def get_native_example_final_state_vector(
     # Use LocalSimulator for state vector simulation
     device = LocalSimulator()
 
+    from typing import Any
+
     # Braket Circuit gate methods (.h, .x, .cnot, etc.) are generated via __getattr__
-    circuit = Circuit()
+    circuit: Any = Circuit()
 
     # Initialize to desired state
     for i, bit in enumerate(initial_state_ket_str):
         if bit == "1":
-            circuit.x(i)  # type: ignore[unresolved-attribute]
+            circuit.x(i)
 
     # Create entanglement between qubits 1 and 2
-    circuit.h(1)  # type: ignore[unresolved-attribute]
-    circuit.cnot(1, 2)  # type: ignore[unresolved-attribute]
+    circuit.h(1)
+    circuit.cnot(1, 2)
 
     # Prepare the state to be teleported on qubit 0
-    circuit.h(0)  # type: ignore[unresolved-attribute]
-    circuit.z(0)  # type: ignore[unresolved-attribute]
+    circuit.h(0)
+    circuit.z(0)
 
     # Perform Bell measurement on qubits 0 and 1
-    circuit.cnot(0, 1)  # type: ignore[unresolved-attribute]
-    circuit.h(0)  # type: ignore[unresolved-attribute]
+    circuit.cnot(0, 1)
+    circuit.h(0)
 
     # Add state_vector result type to get the final state
-    circuit.state_vector()  # type: ignore[unresolved-attribute]
+    circuit.state_vector()
 
     # Run the circuit
-    result = device.run(circuit, shots=0).result()
+    result: Any = device.run(circuit, shots=0).result()
 
     # Get the state vector (values is a complex numpy array)
-    state_vector = result.values[0]  # type: ignore[possibly-missing-attribute, union-attr]
+    state_vector = result.values[0]
 
     return state_vector

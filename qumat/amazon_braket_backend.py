@@ -134,7 +134,7 @@ def execute_circuit(
     else:
         task = backend.run(circuit, shots=shots)
     result = task.result()
-    return result.measurement_counts
+    return getattr(result, "measurement_counts")
 
 
 # placeholder method for use in the testing suite
@@ -155,7 +155,7 @@ def get_final_state_vector(
         result = backend.run(circuit, shots=0, inputs=inputs).result()
     else:
         result = backend.run(circuit, shots=0).result()
-    state_vector = result.values[0]
+    state_vector = getattr(result, "values")[0]
 
     return state_vector
 
