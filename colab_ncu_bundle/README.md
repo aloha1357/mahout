@@ -2,6 +2,21 @@
 
 自包含套件：在 **Google Colab**（或任意 Linux + NVIDIA GPU + CUDA）上編譯、跑 benchmark、對 **所有 PR007 kernel** 做 NCU，並產生 **summary**。
 
+## ⚠️ Colab GPU 硬性需求（請先讀）
+
+| GPU | CC | 能否跑 **完整** `./run_all.sh` |
+|-----|-----|--------------------------------|
+| **T4**（Colab 免費常見） | 7.5 (`sm_75`) | **不行** — 不支援 `mma.m16n8k32` INT8（Ozaki 核心） |
+| **A100** | 8.0 (`sm_80`) | **可以** |
+| **L4** | 8.9 (`sm_89`) | **可以** |
+| RTX 3060+ / 4060 | 8.x | **可以** |
+
+`detect_gpu_arch.sh` 會正確設成 `sm_75`（T4），但 **硬體不支援 Ozaki 用的 Tensor Core 指令**，不是 README 寫錯。
+
+**Colab 操作：** `執行階段` → `變更執行階段類型` → 硬體加速器 **GPU** → 盡量選 **A100** 或 **L4**（通常需 Colab Pro / 付費額度）。選 T4 時 `./run_all.sh` 會在編譯或執行階段失敗。
+
+若必須用 T4：只能在本機/Colab 用 **side kernel** 相關實驗（見主 repo Windows NCU 已成功的三個 kernel），**無法**跑完整 Ozaki TC 路徑。
+
 ## 資料夾內容
 
 ```
@@ -166,13 +181,15 @@ python3 scripts/generate_ncu_summary.py
 
 ## 架構注意（Colab GPU）
 
-`scripts/detect_gpu_arch.sh` 會依 `nvidia-smi` 設 `-arch=sm_XX`：
+`scripts/detect_gpu_arch.sh` 會依 `nvidia-smi` 設 `-arch=sm_XX`（**與 GPU 一致**）：
 
-- T4 → `sm_75`
-- A100 → `sm_80`
+- T4 → `sm_75` → **Ozaki 編譯/執行不支援**（見上方表格）
+- A100 → `sm_80` → 建議 Colab 選項
 - L4 / RTX 40xx → `sm_89`
 
-若編譯失敗，手動改 `scripts/build.sh` 裡的 `-arch`。
+`scripts/check_gpu_compat.sh` 會在 CC < 8.0 時 **提前失敗** 並提示改選 A100。
+
+**不要**在 T4 上強制 `-arch=sm_80`：即使編譯過，執行也會出現 *no kernel image* 或 MMA 錯誤。
 
 ---
 

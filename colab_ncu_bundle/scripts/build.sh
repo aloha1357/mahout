@@ -5,6 +5,8 @@ export PATH="/usr/local/cuda/bin:${PATH:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+bash scripts/check_gpu_compat.sh || exit 1
+
 ARCH=$(bash scripts/detect_gpu_arch.sh)
 echo "=== Detected GPU arch: $ARCH ==="
 nvcc --version | head -3

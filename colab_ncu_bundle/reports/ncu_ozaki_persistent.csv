@@ -1,0 +1,14 @@
+==PROF== Connected to process 968 (/mnt/d/D_backup/2025/tum/26S/apache_mout/_colab_test/apache_mout/colab_ncu_bundle/build/bench_kernels)
+
+==ERROR== LaunchFailed
+==PROF== Trying to shutdown target application
+==ERROR== The application returned an error code (9).
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","Section Name","Metric Name","Metric Unit","Metric Value"
+"0","968","bench_kernels","127.0.0.1","void implicit_hadamard_ozaki_persistent_kernel_implicit<0>(const signed char *, double *, int, int, int, double, int *, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","dram__throughput.avg.pct_of_peak_sustained_elapsed","%","nan"
+"0","968","bench_kernels","127.0.0.1","void implicit_hadamard_ozaki_persistent_kernel_implicit<0>(const signed char *, double *, int, int, int, double, int *, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","gpu__time_duration.sum","ns","nan"
+"0","968","bench_kernels","127.0.0.1","void implicit_hadamard_ozaki_persistent_kernel_implicit<0>(const signed char *, double *, int, int, int, double, int *, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","launch__registers_per_thread","","n/a"
+"0","968","bench_kernels","127.0.0.1","void implicit_hadamard_ozaki_persistent_kernel_implicit<0>(const signed char *, double *, int, int, int, double, int *, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","launch__shared_mem_per_block","","n/a"
+"0","968","bench_kernels","127.0.0.1","void implicit_hadamard_ozaki_persistent_kernel_implicit<0>(const signed char *, double *, int, int, int, double, int *, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","lts__throughput.avg.pct_of_peak_sustained_elapsed","%","nan"
+"0","968","bench_kernels","127.0.0.1","void implicit_hadamard_ozaki_persistent_kernel_implicit<0>(const signed char *, double *, int, int, int, double, int *, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","sm__pipe_tensor_active.avg.pct_of_peak_sustained_active","","n/a"
+"0","968","bench_kernels","127.0.0.1","void implicit_hadamard_ozaki_persistent_kernel_implicit<0>(const signed char *, double *, int, int, int, double, int *, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","sm__throughput.avg.pct_of_peak_sustained_elapsed","%","nan"
+"0","968","bench_kernels","127.0.0.1","void implicit_hadamard_ozaki_persistent_kernel_implicit<0>(const signed char *, double *, int, int, int, double, int *, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","smsp__warps_active.avg.pct_of_peak_sustained_active","%","nan"

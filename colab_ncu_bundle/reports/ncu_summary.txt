@@ -1,0 +1,58 @@
+PR007 NCU Summary — Colab bundle — 2026-06-02 12:08 UTC
+
+Baseline FWT (14 butterfly stages, batch=1)
+-------------------------------------------
+  NCU status: OK
+  DRAM throughput: 33.38%
+  L2 throughput: 10.45%
+  SM throughput: 10.31%
+  Warps active: 21.88%
+  Registers / thread: 28
+  Shared memory / block: 1024
+  Kernel duration (us, avg): 3.17
+
+TC: phase split
+---------------
+  NCU status: OK
+  DRAM throughput: 0.43%
+  L2 throughput: 2.83%
+  SM throughput: 67.29%
+  Warps active: 37.50%
+  Registers / thread: 40
+  Shared memory / block: 1024
+  Kernel duration (us, avg): 12.54
+
+TC: modulo precompute
+---------------------
+  NCU status: OK
+  DRAM throughput: 18.35%
+  L2 throughput: 5.59%
+  SM throughput: 17.00%
+  Warps active: 55.38%
+  Registers / thread: 28
+  Shared memory / block: 1024
+  Kernel duration (us, avg): 2.91
+
+Ozaki MMA grid (OZAKI_NCU_PROFILE=1)
+------------------------------------
+  NCU status: LaunchFailed
+
+Ozaki MMA persistent (production)
+---------------------------------
+  NCU status: LaunchFailed
+
+Benchmark (see reports/benchmark_results.txt)
+  Bench execution complete. Duration: 75 us
+  Correctness Verification - Max Absolute Error: 0
+  [  PASSED  ] KernelBench.Correctness
+  Bench execution complete. Duration: 28 us
+  Correctness Verification - Max Absolute Error: 0
+  [  PASSED  ] KernelBench.Correctness
+  Bench execution complete. Duration: 38 us
+  Correctness Verification - Max Absolute Error: 0
+  [  PASSED  ] KernelBench.Correctness
+  Bench execution complete. Duration: 29 us
+  Correctness Verification - Max Absolute Error: 0
+  [  PASSED  ] KernelBench.Correctness
+
+Raw CSV: reports/ncu_*.csv | Logs: reports/ncu_*.log

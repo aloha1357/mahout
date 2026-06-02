@@ -1,0 +1,13 @@
+==PROF== Connected to process 889 (/mnt/d/D_backup/2025/tum/26S/apache_mout/_colab_test/apache_mout/colab_ncu_bundle/build/bench_kernels)
+Bench execution complete. Duration: 69 us
+Correctness Verification - Max Absolute Error: 0
+[  PASSED  ] KernelBench.Correctness
+==PROF== Disconnected from process 889
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","Section Name","Metric Name","Metric Unit","Metric Value"
+"0","889","bench_kernels","127.0.0.1","precompute_modulo_kernel_p26_implicit(const double *, signed char *, int, int, int, double, double)","1","7","(32, 32, 1)","(4, 4, 1)","0","8.9","Command line profiler metrics","dram__throughput.avg.pct_of_peak_sustained_elapsed","%","18.35"
+"0","889","bench_kernels","127.0.0.1","precompute_modulo_kernel_p26_implicit(const double *, signed char *, int, int, int, double, double)","1","7","(32, 32, 1)","(4, 4, 1)","0","8.9","Command line profiler metrics","gpu__time_duration.sum","ns","2912"
+"0","889","bench_kernels","127.0.0.1","precompute_modulo_kernel_p26_implicit(const double *, signed char *, int, int, int, double, double)","1","7","(32, 32, 1)","(4, 4, 1)","0","8.9","Command line profiler metrics","launch__registers_per_thread","register/thread","28"
+"0","889","bench_kernels","127.0.0.1","precompute_modulo_kernel_p26_implicit(const double *, signed char *, int, int, int, double, double)","1","7","(32, 32, 1)","(4, 4, 1)","0","8.9","Command line profiler metrics","launch__shared_mem_per_block","byte/block","1024"
+"0","889","bench_kernels","127.0.0.1","precompute_modulo_kernel_p26_implicit(const double *, signed char *, int, int, int, double, double)","1","7","(32, 32, 1)","(4, 4, 1)","0","8.9","Command line profiler metrics","lts__throughput.avg.pct_of_peak_sustained_elapsed","%","5.59"
+"0","889","bench_kernels","127.0.0.1","precompute_modulo_kernel_p26_implicit(const double *, signed char *, int, int, int, double, double)","1","7","(32, 32, 1)","(4, 4, 1)","0","8.9","Command line profiler metrics","sm__throughput.avg.pct_of_peak_sustained_elapsed","%","17.00"
+"0","889","bench_kernels","127.0.0.1","precompute_modulo_kernel_p26_implicit(const double *, signed char *, int, int, int, double, double)","1","7","(32, 32, 1)","(4, 4, 1)","0","8.9","Command line profiler metrics","smsp__warps_active.avg.pct_of_peak_sustained_active","%","55.38"
