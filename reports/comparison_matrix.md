@@ -1,10 +1,14 @@
 # Comparison Matrix
 
-## Hardware Environment
-- **GPU**: NVIDIA GeForce RTX 4060 (Laptop)
-- **Architecture**: Ada Lovelace (sm_89)
-- **CUDA**: 13.0
-- **Driver**: 581.57 (WDDM Mode)
+## Hardware
+RTX 4060
+CUDA 13.0
+Driver 581.57 (WDDM Mode)
+
+---
+
+## Workload
+n = 14 and n = 16 qubits (state vector size 2^14 to 2^16)
 
 ---
 
