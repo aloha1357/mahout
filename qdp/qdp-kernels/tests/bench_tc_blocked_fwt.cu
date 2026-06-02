@@ -5,19 +5,43 @@
 #include <cmath>
 #include "ImplicitHadamardOzaki.h"
 
-// Naive Batch Transpose: (B, rows, cols) -> (B, cols, rows)
+#define TRANSPOSE_TILE_DIM 32
+#define TRANSPOSE_BLOCK_ROWS 8
+
+// Shared Memory Bank-Conflict-Free Batch Transpose
 __global__ void batch_transpose_kernel(const double* __restrict__ in, double* __restrict__ out, int B, int rows, int cols) {
+    // TILE_DIM x (TILE_DIM+1) pad to avoid shared memory bank conflicts
+    __shared__ double tile[TRANSPOSE_TILE_DIM][TRANSPOSE_TILE_DIM + 1];
+
     int b = blockIdx.z;
-    int r = blockIdx.y * blockDim.y + threadIdx.y;
-    int c = blockIdx.x * blockDim.x + threadIdx.x;
-    if (r < rows && c < cols) {
-        out[b * rows * cols + c * rows + r] = in[b * rows * cols + r * cols + c];
+    int x = blockIdx.x * TRANSPOSE_TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TRANSPOSE_TILE_DIM + threadIdx.y;
+
+    // Load from global memory (coalesced) into shared memory
+    for (int j = 0; j < TRANSPOSE_TILE_DIM; j += TRANSPOSE_BLOCK_ROWS) {
+        if (x < cols && (y + j) < rows) {
+            tile[threadIdx.y + j][threadIdx.x] = in[b * rows * cols + (y + j) * cols + x];
+        }
+    }
+
+    __syncthreads();
+
+    // Transposed block coordinates
+    x = blockIdx.y * TRANSPOSE_TILE_DIM + threadIdx.x; 
+    y = blockIdx.x * TRANSPOSE_TILE_DIM + threadIdx.y;
+
+    // Store from shared memory to global memory (coalesced)
+    for (int j = 0; j < TRANSPOSE_TILE_DIM; j += TRANSPOSE_BLOCK_ROWS) {
+        if (x < rows && (y + j) < cols) {
+            out[b * rows * cols + (y + j) * rows + x] = tile[threadIdx.x][threadIdx.y + j];
+        }
     }
 }
 
 void launch_batch_transpose(const double* d_in, double* d_out, int B, int rows, int cols) {
-    dim3 block(16, 16, 1);
-    dim3 grid((cols + 15) / 16, (rows + 15) / 16, B);
+    dim3 block(TRANSPOSE_TILE_DIM, TRANSPOSE_BLOCK_ROWS, 1);
+    dim3 grid((cols + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM, 
+              (rows + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM, B);
     batch_transpose_kernel<<<grid, block>>>(d_in, d_out, B, rows, cols);
 }
 

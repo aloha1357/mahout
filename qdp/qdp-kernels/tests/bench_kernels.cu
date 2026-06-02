@@ -3,6 +3,7 @@
 #include <vector>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <cuComplex.h>
 
 extern "C" int launch_iqp_encode_batch(
@@ -28,9 +29,15 @@ extern "C" int launch_iqp_encode_tc(
 
 int main(int argc, char* argv[]) {
     size_t num_samples = 128; // Reduced batch size for larger qubits to fit memory
-    unsigned int num_qubits = 14; 
+    unsigned int num_qubits = 14;
     if (argc > 1) {
         num_qubits = std::atoi(argv[1]);
+    }
+    if (argc > 2) {
+        num_samples = std::strtoull(argv[2], nullptr, 10);
+    }
+    if (const char* env_samples = std::getenv("IQP_NUM_SAMPLES")) {
+        num_samples = std::strtoull(env_samples, nullptr, 10);
     }
     size_t state_len = 1ULL << num_qubits;
     unsigned int data_len = num_qubits;

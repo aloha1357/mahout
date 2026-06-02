@@ -121,19 +121,43 @@ __global__ void iqp_phase_split_kernel(
     }
 }
 
-// Naive Batch Transpose: (B, rows, cols) -> (B, cols, rows)
+#define TRANSPOSE_TILE_DIM 32
+#define TRANSPOSE_BLOCK_ROWS 8
+
+// Shared Memory Bank-Conflict-Free Batch Transpose
 __global__ void iqp_tc_batch_transpose_kernel(const double* __restrict__ in, double* __restrict__ out, int B, int rows, int cols) {
+    // TILE_DIM x (TILE_DIM+1) pad to avoid shared memory bank conflicts
+    __shared__ double tile[TRANSPOSE_TILE_DIM][TRANSPOSE_TILE_DIM + 1];
+
     int b = blockIdx.z;
-    int r = blockIdx.y * blockDim.y + threadIdx.y;
-    int c = blockIdx.x * blockDim.x + threadIdx.x;
-    if (r < rows && c < cols) {
-        out[b * rows * cols + c * rows + r] = in[b * rows * cols + r * cols + c];
+    int x = blockIdx.x * TRANSPOSE_TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TRANSPOSE_TILE_DIM + threadIdx.y;
+
+    // Load from global memory (coalesced) into shared memory
+    for (int j = 0; j < TRANSPOSE_TILE_DIM; j += TRANSPOSE_BLOCK_ROWS) {
+        if (x < cols && (y + j) < rows) {
+            tile[threadIdx.y + j][threadIdx.x] = in[b * rows * cols + (y + j) * cols + x];
+        }
+    }
+
+    __syncthreads();
+
+    // Transposed block coordinates
+    x = blockIdx.y * TRANSPOSE_TILE_DIM + threadIdx.x; 
+    y = blockIdx.x * TRANSPOSE_TILE_DIM + threadIdx.y;
+
+    // Store from shared memory to global memory (coalesced)
+    for (int j = 0; j < TRANSPOSE_TILE_DIM; j += TRANSPOSE_BLOCK_ROWS) {
+        if (x < rows && (y + j) < cols) {
+            out[b * rows * cols + (y + j) * rows + x] = tile[threadIdx.x][threadIdx.y + j];
+        }
     }
 }
 
 void iqp_tc_launch_transpose(const double* d_in, double* d_out, int B, int rows, int cols, cudaStream_t stream) {
-    dim3 block(16, 16, 1);
-    dim3 grid((cols + 15) / 16, (rows + 15) / 16, B);
+    dim3 block(TRANSPOSE_TILE_DIM, TRANSPOSE_BLOCK_ROWS, 1);
+    dim3 grid((cols + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM, 
+              (rows + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM, B);
     iqp_tc_batch_transpose_kernel<<<grid, block, 0, stream>>>(d_in, d_out, B, rows, cols);
 }
 
@@ -201,16 +225,17 @@ extern "C" int launch_iqp_encode_tc(
         double norm_factor = 1.0 / (double)state_len;
 
         // 3. TC-FWT Step 1: Z = X * H_{n2} (X shape: B*dim1 x dim2)
-        engine.execute_implicit_hadamard(d_state_real, d_out_real, num_samples * dim1, dim2, dim2, 1.0);
-        engine.execute_implicit_hadamard(d_state_imag, d_out_imag, num_samples * dim1, dim2, dim2, 1.0);
+        // Note: engine.execute_implicit_hadamard internally zeros d_C
+        engine.execute_implicit_hadamard(d_state_real, d_out_real, num_samples * dim1, dim2, dim2, 1.0, stream);
+        engine.execute_implicit_hadamard(d_state_imag, d_out_imag, num_samples * dim1, dim2, dim2, 1.0, stream);
 
         // 4. TC-FWT Step 2: Transpose (B, dim1, dim2) -> (B, dim2, dim1)
         iqp_tc_launch_transpose(d_out_real, d_temp_real, num_samples, dim1, dim2, stream);
         iqp_tc_launch_transpose(d_out_imag, d_temp_imag, num_samples, dim1, dim2, stream);
 
         // 5. TC-FWT Step 3: Y_T = Z_T * H_{n1} (Z_T shape: B*dim2 x dim1)
-        engine.execute_implicit_hadamard(d_temp_real, d_out_real, num_samples * dim2, dim1, dim1, norm_factor);
-        engine.execute_implicit_hadamard(d_temp_imag, d_out_imag, num_samples * dim2, dim1, dim1, norm_factor);
+        engine.execute_implicit_hadamard(d_temp_real, d_out_real, num_samples * dim2, dim1, dim1, norm_factor, stream);
+        engine.execute_implicit_hadamard(d_temp_imag, d_out_imag, num_samples * dim2, dim1, dim1, norm_factor, stream);
 
         // 6. TC-FWT Step 4: Transpose back (B, dim2, dim1) -> (B, dim1, dim2)
         iqp_tc_launch_transpose(d_out_real, d_temp_real, num_samples, dim2, dim1, stream);

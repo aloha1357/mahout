@@ -14,7 +14,7 @@ public:
     explicit ImplicitHadamardOzakiEngine(const OzakiConfig& config) : config_(config) {}
     ~ImplicitHadamardOzakiEngine() = default;
 
-    void execute_implicit_hadamard(const double* d_A, double* d_C, int m, int n, int k, double norm_factor);
+    void execute_implicit_hadamard(const double* d_A, double* d_C, int m, int n, int k, double norm_factor, cudaStream_t stream = 0);
 
 private:
     OzakiConfig config_;
