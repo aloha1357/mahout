@@ -80,11 +80,13 @@ jobs:
 
       - name: Build QDP extension
         uses: PyO3/maturin-action@v1
+        env:
+          QDP_CUDA_ARCH_LIST: "80"
         with:
           working-directory: qdp/qdp-python
           command: develop
           args: --release
-          sccache: true
+          sccache: false
 
       - name: Install PyTorch (CPU)
         run: uv pip install torch --index-url https://download.pytorch.org/whl/cpu
