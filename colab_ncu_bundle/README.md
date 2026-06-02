@@ -43,10 +43,19 @@ Summary 輸出：
 
 ## 方法一：Google Colab（推薦）
 
-### 1) 上傳
+### 1) 上傳 / 解壓
 
-1. 將整個 **`colab_ncu_bundle`** 資料夾壓成 zip，或直接在 Colab 上傳資料夾。
+1. 下載或解壓 **`apache_mout_colab.zip`**（結構為 `apache_mout/colab_ncu_bundle/...`）。
 2. 在 Colab 選 **Runtime → Change runtime type → GPU**（T4 / L4 / A100 皆可）。
+
+解壓後目錄應為：
+
+```
+/content/apache_mout/colab_ncu_bundle/   ← Colab 預設上傳到 /content
+├── run_all.sh
+├── README.md
+└── ...
+```
 
 ### 2) 安裝 / 確認 NCU
 
@@ -70,15 +79,15 @@ if not os.path.exists(ncu):
 apt-get update -qq && apt-get install -y -qq cuda-nsight-compute-12-6 2>/dev/null || true
 ```
 
-### 3) 一鍵執行
+### 3) 一鍵執行（與 Colab 筆記本相同）
 
 ```python
-import os
-os.chdir("/content/colab_ncu_bundle")  # 改成你解壓後的路徑
-
+%cd apache_mout/colab_ncu_bundle
 !chmod +x run_all.sh scripts/*.sh
 !./run_all.sh
 ```
+
+若解壓在別處，先 `%cd` 到含 `run_all.sh` 的 `colab_ncu_bundle` 目錄即可。
 
 ### 4) 看結果
 
