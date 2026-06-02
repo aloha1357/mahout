@@ -128,8 +128,8 @@ void AdaptiveOzakiEngine::allocateWorkspace(int m, int n, int k) {
     workspace_allocated_ = false;
 }
 
-PreScanStats AdaptiveOzakiEngine::analyzeMatrix(const double* d_A, const double* d_B, int m, int n, int k) { return PreScanStats{1.0, 0.0, std::min(m, std::min(n, k))}; }
-int AdaptiveOzakiEngine::calculateOptimalTile(int m, int n, int k) { return 128; }
+PreScanStats AdaptiveOzakiEngine::analyzeMatrix(const double* /*d_A*/, const double* /*d_B*/, int m, int n, int k) { return PreScanStats{1.0, 0.0, std::min(m, std::min(n, k))}; }
+int AdaptiveOzakiEngine::calculateOptimalTile(int /*m*/, int /*n*/, int /*k*/) { return 128; }
 
 __global__ void precompute_modulo_kernel(const double* __restrict__ s, int8_t* __restrict__ d, int r, int c, int m, double sh, double sl) {
     // blockIdx.x: k_tiles, blockIdx.y: m_tiles. Block size: (32, 32)
@@ -663,7 +663,7 @@ struct KernelHeteroConfig {
 
 __device__ __forceinline__ void crt_pass_kernel_body(const int8_t* __restrict__ A8, const int8_t* __restrict__ B8, double* __restrict__ C, const uint64_t* mA, const uint64_t* mB, int m, int n, int k, double inv, KernelHeteroConfig cfg) {
     int rb = blockIdx.y * 128, cb = blockIdx.x * 64, tid = threadIdx.x, lane = tid % 32, wid = tid / 32;
-    int wm = wid / 2, wn = wid % 2, ms = wm * 32, ns = (wid % 2) * 32;
+    int wm = wid / 2, ms = wm * 32, ns = (wid % 2) * 32;
     uint64_t bma = mA[blockIdx.y], bmb = mB[blockIdx.x / 2], M = 0; int nl = 0;
     int tc_begin = cfg.warp_fp64;
     int tc_end = cfg.warp_fp64 + cfg.warp_tc;

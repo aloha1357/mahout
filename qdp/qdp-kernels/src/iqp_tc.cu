@@ -17,7 +17,6 @@
 // iqp_tc.cu
 #include <cuda_runtime.h>
 #include <cuComplex.h>
-#include <cublas_v2.h>
 #include <iostream>
 #include "kernel_config.h"
 #include "ImplicitHadamardOzaki.h"
