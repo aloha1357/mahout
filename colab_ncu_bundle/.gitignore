@@ -1,0 +1,8 @@
+build/
+reports/*.csv
+reports/*.log
+reports/benchmark_results.txt
+reports/ncu_summary.txt
+reports/ncu_summary.md
+reports/ncu_run_manifest.txt
+!reports/.gitkeep
