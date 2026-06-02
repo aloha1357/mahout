@@ -104,6 +104,19 @@ allowed-unresolved-imports = [
     "api.*",
     "qumat_qdp",
     "qumat_qdp.*",
+    "adaptive_gemm_py",
+    "IPython.display",
+    "google.colab",
+    "numpy",
+    "pytest",
+    "boto3",
+    "braket.aws",
+    "braket.circuits",
+    "braket.devices",
+    "cirq",
+    "qiskit",
+    "qiskit.*",
+    "qiskit_aer",
 ]
 
 [tool.ruff]

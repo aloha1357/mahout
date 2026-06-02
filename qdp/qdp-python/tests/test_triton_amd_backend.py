@@ -18,6 +18,7 @@ import math
 
 import pytest
 import torch
+import torch.version
 from qumat_qdp import QdpEngine, is_triton_amd_available
 from qumat_qdp.torch_ref import iqp_encode as _torch_ref_iqp
 from qumat_qdp.triton_amd import TritonAmdEngine
