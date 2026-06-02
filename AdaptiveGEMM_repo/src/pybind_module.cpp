@@ -52,7 +52,7 @@ class AdaptiveGEMMWrapper {
 public:
     AdaptiveGEMMWrapper() {
         // Default configuration
-        config_.mode = ExecutionMode::Phase22; 
+        config_.mode = ExecutionMode::Phase22;
     }
 
     py::array_t<double> gemm(py::array_t<double> a, py::array_t<double> b) {

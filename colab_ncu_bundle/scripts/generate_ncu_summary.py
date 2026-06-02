@@ -16,6 +16,7 @@
 # limitations under the License.
 
 """Aggregate reports/ncu_*.csv into ncu_summary.txt + ncu_summary.md + status table."""
+
 from __future__ import annotations
 
 import csv
@@ -41,11 +42,27 @@ METRIC_LABELS = {
 # PR007 kernel tags -> human title
 KERNEL_CASES = [
     ("ncu_fwt_baseline.csv", "fwt_butterfly_batch_kernel", "Baseline FWT"),
-    ("ncu_simt_tc_fused.csv", "iqp_phase_fwt_normalize_tc_kernel", "SIMT TC fused (N<=12 path, T4 compat)"),
+    (
+        "ncu_simt_tc_fused.csv",
+        "iqp_phase_fwt_normalize_tc_kernel",
+        "SIMT TC fused (N<=12 path, T4 compat)",
+    ),
     ("ncu_phase_split.csv", "iqp_phase_split_kernel", "TC: phase split (N>12)"),
-    ("ncu_modulo_precompute.csv", "precompute_modulo_kernel_p26_implicit", "TC: modulo precompute"),
-    ("ncu_ozaki_grid.csv", "implicit_hadamard_ozaki_grid_kernel_implicit", "Ozaki MMA grid (OZAKI_NCU_PROFILE=1)"),
-    ("ncu_ozaki_persistent.csv", "implicit_hadamard_ozaki_persistent_kernel_implicit", "Ozaki MMA persistent"),
+    (
+        "ncu_modulo_precompute.csv",
+        "precompute_modulo_kernel_p26_implicit",
+        "TC: modulo precompute",
+    ),
+    (
+        "ncu_ozaki_grid.csv",
+        "implicit_hadamard_ozaki_grid_kernel_implicit",
+        "Ozaki MMA grid (OZAKI_NCU_PROFILE=1)",
+    ),
+    (
+        "ncu_ozaki_persistent.csv",
+        "implicit_hadamard_ozaki_persistent_kernel_implicit",
+        "Ozaki MMA persistent",
+    ),
 ]
 
 
@@ -87,10 +104,19 @@ def format_metric(name: str, values: list[float]) -> str:
     v = statistics.mean(values)
     if name == "gpu__time_duration.sum":
         return f"  {METRIC_LABELS.get(name, name)}: {v / 1000:.2f}"
-    if "Registers" in METRIC_LABELS.get(name, "") or "Shared" in METRIC_LABELS.get(name, ""):
+    if "Registers" in METRIC_LABELS.get(name, "") or "Shared" in METRIC_LABELS.get(
+        name, ""
+    ):
         return f"  {METRIC_LABELS.get(name, name)}: {v:.0f}"
     label = METRIC_LABELS.get(name, name)
-    return f"  {label}: {v:.2f}%" if "throughput" in name or "warps" in name or "pipe_tensor" in name or "active" in name else f"  {label}: {v:.2f}"
+    return (
+        f"  {label}: {v:.2f}%"
+        if "throughput" in name
+        or "warps" in name
+        or "pipe_tensor" in name
+        or "active" in name
+        else f"  {label}: {v:.2f}"
+    )
 
 
 def main() -> int:
@@ -138,7 +164,9 @@ def main() -> int:
             if "gpu__time_duration.sum" in metrics:
                 dur = f"{statistics.mean(metrics['gpu__time_duration.sum']) / 1000:.2f}"
 
-        md_rows.append(f"| {title} | {status} | {dram} | {sm} | {tensor} | {warps} | {dur} |")
+        md_rows.append(
+            f"| {title} | {status} | {dram} | {sm} | {tensor} | {warps} | {dur} |"
+        )
         lines_txt.append("")
 
     bench = REPORTS / "benchmark_results.txt"
@@ -153,7 +181,10 @@ def main() -> int:
     txt_path = REPORTS / "ncu_summary.txt"
     md_path = REPORTS / "ncu_summary.md"
     txt_path.write_text("\n".join(lines_txt), encoding="utf-8")
-    md_path.write_text("\n".join(md_rows) + "\n\n## Detail\n\nSee `ncu_summary.txt`.\n", encoding="utf-8")
+    md_path.write_text(
+        "\n".join(md_rows) + "\n\n## Detail\n\nSee `ncu_summary.txt`.\n",
+        encoding="utf-8",
+    )
 
     print(txt_path.read_text(encoding="utf-8"))
     return 0

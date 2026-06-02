@@ -160,8 +160,8 @@ python3 scripts/generate_ncu_summary.py
 
 **Bottleneck 速讀（與 handover 一致）：**
 
-- FWT baseline：DRAM 高、SM 低 → memory-leaning  
-- phase_split：SM 高、DRAM 極低 → compute-bound  
+- FWT baseline：DRAM 高、SM 低 → memory-leaning
+- phase_split：SM 高、DRAM 極低 → compute-bound
 - Ozaki MMA：看 **Tensor pipe active %**（若 NCU OK）
 
 ---

@@ -41,7 +41,7 @@ __global__ void warp_fwt_batch_kernel(cuDoubleComplex* state, size_t num_samples
         int mask = 1 << d;
         double r_other = __shfl_xor_sync(0xffffffff, val.x, mask);
         double i_other = __shfl_xor_sync(0xffffffff, val.y, mask);
-        
+
         if ((lane_id & mask) == 0) {
             val.x = val.x + r_other;
             val.y = val.y + i_other;
@@ -50,7 +50,7 @@ __global__ void warp_fwt_batch_kernel(cuDoubleComplex* state, size_t num_samples
             val.y = i_other - val.y;
         }
     }
-    
+
     // Store back to Global
     state[idx] = val;
 }
@@ -60,13 +60,13 @@ __global__ void warp_fwt_batch_kernel(cuDoubleComplex* state, size_t num_samples
 // ============================================================================
 __global__ void shared_fwt_batch_kernel(cuDoubleComplex* state, size_t num_samples) {
     extern __shared__ cuDoubleComplex smem[];
-    
+
     size_t sample_idx = blockIdx.x;
     if (sample_idx >= num_samples) return;
 
     size_t tid = threadIdx.x; // 32 threads per block
     size_t idx = sample_idx * 32 + tid;
-    
+
     // Load to Shared Memory
     smem[tid] = state[idx];
     __syncthreads();
@@ -75,7 +75,7 @@ __global__ void shared_fwt_batch_kernel(cuDoubleComplex* state, size_t num_sampl
     for (int stage = 0; stage < 5; ++stage) {
         size_t stride = 1ULL << stage;
         size_t block_size = stride << 1;
-        
+
         if (tid < 16) {
             size_t block_idx = tid / stride;
             size_t pair_offset = tid % stride;
@@ -90,7 +90,7 @@ __global__ void shared_fwt_batch_kernel(cuDoubleComplex* state, size_t num_sampl
         }
         __syncthreads();
     }
-    
+
     // Write back
     state[idx] = smem[tid];
 }
@@ -120,7 +120,7 @@ int main() {
     int threads_sm = 32;
     int blocks_sm = num_samples;
     size_t smem_size = 32 * sizeof(cuDoubleComplex);
-    
+
     // Warmup
     shared_fwt_batch_kernel<<<blocks_sm, threads_sm, smem_size>>>(d_state, num_samples);
     cudaDeviceSynchronize();
@@ -140,7 +140,7 @@ int main() {
     // ----------------------------------------------------
     int threads_warp = 256; // 8 warps per block
     int blocks_warp = (num_samples + 7) / 8;
-    
+
     // Warmup
     warp_fwt_batch_kernel<<<blocks_warp, threads_warp>>>(d_state, num_samples);
     cudaDeviceSynchronize();
@@ -154,7 +154,7 @@ int main() {
     cudaEventElapsedTime(&ms, start, stop);
     float warp_time = ms / 10.0f;
     std::cout << " [TDD-1] SIMT Register FWT : " << std::fixed << std::setprecision(3) << warp_time << " ms\n";
-    
+
     float speedup = smem_time / warp_time;
     std::cout << "----------------------------------------------------\n";
     std::cout << " >> TDD-1 Speedup over TDD-2: " << speedup << "x\n";

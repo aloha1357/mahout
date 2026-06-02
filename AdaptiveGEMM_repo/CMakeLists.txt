@@ -80,7 +80,7 @@ target_link_libraries(adaptive_gemm
 include(FetchContent)
 FetchContent_Declare(
     pybind11
-    GIT_REPOSITORY https://github.com/pybind/pybind11.git    
+    GIT_REPOSITORY https://github.com/pybind/pybind11.git
     GIT_TAG        v2.11.1
 )
 FetchContent_MakeAvailable(pybind11)
@@ -93,7 +93,7 @@ pybind11_add_module(adaptive_gemm_py
 
 target_include_directories(adaptive_gemm_py PUBLIC ${ADAPTIVEGEMM_ROOT}/include)
 
-target_link_libraries(adaptive_gemm_py PRIVATE 
+target_link_libraries(adaptive_gemm_py PRIVATE
     pybind11::module
     adaptive_gemm
     CUDA::cublas

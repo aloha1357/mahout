@@ -1,13 +1,13 @@
 # TC-QDP PR Roadmap
 ## Tensor Core × Apache Mahout QDP — TDD 執行計畫
 
-> **核心判準：ncu profiling 數字是唯一的成功指標**  
+> **核心判準：ncu profiling 數字是唯一的成功指標**
 > RTX 4060 Ada · INT8 Tensor Core · Ozaki Scheme + CRT + PTX `mma.sync`
 
 ---
-link:https://github.co   
-   m/apache/mahout/issues/1227https://github.com/aloha1357/Adapti   
-   veGEMM                                                      
+link:https://github.co
+   m/apache/mahout/issues/1227https://github.com/aloha1357/Adapti
+   veGEMM
 ## 背景數字
 
 | 指標 | 數值 |
@@ -90,7 +90,7 @@ link:https://github.co
 ### PR-A：ncu Baseline Profiling
 > **時程：~3-5 天 ｜ 最快能 merge 的 PR**
 
-**目標：** 建立每個 kernel 的 ncu baseline JSON，作為之後所有 TC PR 的比較基準。  
+**目標：** 建立每個 kernel 的 ncu baseline JSON，作為之後所有 TC PR 的比較基準。
 Mahout roadmap Stage 2 明確需要但目前沒有人做。
 
 #### 🔴 RED：寫 benchmark harness test
@@ -354,7 +354,7 @@ python3 scripts/compare_ncu.py \
 
 > **你是唯一一個在消費級 GPU 上用 INT8 Tensor Core 模擬 FP64 精度做量子編碼加速的人。**
 >
-> torch.compile 最多用 cuBLAS，不會用 Ozaki + PTX 直通 TC 的路徑。  
+> torch.compile 最多用 cuBLAS，不會用 Ozaki + PTX 直通 TC 的路徑。
 > 這在 2026 年是可以寫進簡歷、寫進論文、寫進 Apache 專案 CHANGELOG 的獨特貢獻。
 
 ---

@@ -131,7 +131,7 @@ __global__ void iqp_phase_split_kernel(
         double phase = compute_phase_tc(data, x, num_qubits, enable_zz);
         double cos_phase, sin_phase;
         sincos(phase, &sin_phase, &cos_phase);
-        
+
         state_real[global_idx] = cos_phase;
         state_imag[global_idx] = sin_phase;
     }
@@ -159,7 +159,7 @@ __global__ void iqp_tc_batch_transpose_kernel(const double* __restrict__ in, dou
     __syncthreads();
 
     // Transposed block coordinates
-    x = blockIdx.y * TRANSPOSE_TILE_DIM + threadIdx.x; 
+    x = blockIdx.y * TRANSPOSE_TILE_DIM + threadIdx.x;
     y = blockIdx.x * TRANSPOSE_TILE_DIM + threadIdx.y;
 
     // Store from shared memory to global memory (coalesced)
@@ -172,7 +172,7 @@ __global__ void iqp_tc_batch_transpose_kernel(const double* __restrict__ in, dou
 
 void iqp_tc_launch_transpose(const double* d_in, double* d_out, int B, int rows, int cols, cudaStream_t stream) {
     dim3 block(TRANSPOSE_TILE_DIM, TRANSPOSE_BLOCK_ROWS, 1);
-    dim3 grid((cols + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM, 
+    dim3 grid((cols + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM,
               (rows + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM, B);
     iqp_tc_batch_transpose_kernel<<<grid, block, 0, stream>>>(d_in, d_out, B, rows, cols);
 }
@@ -212,7 +212,7 @@ extern "C" int launch_iqp_encode_tc(
         // [Phase 5] Blocked TC-FWT (Kronecker Product Decomposition)
         size_t m_samples = num_samples;
         size_t total_elements = m_samples * state_len;
-        
+
         int n1 = num_qubits / 2;
         int n2 = num_qubits - n1;
         int dim1 = 1 << n1;

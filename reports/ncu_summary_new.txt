@@ -41,4 +41,3 @@ Ozaki Grid (Attempt)
   Shared memory / block: N/A
   Kernel duration (ns): N/A
   Tensor Core active: N/A
-

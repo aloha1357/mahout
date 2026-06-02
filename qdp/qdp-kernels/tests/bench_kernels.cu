@@ -44,7 +44,7 @@ extern "C" int launch_iqp_encode_tc(
 );
 
 int main(int argc, char* argv[]) {
-    size_t num_samples = 128; 
+    size_t num_samples = 128;
     unsigned int num_qubits = 14;
     if (argc > 1) {
         num_qubits = std::atoi(argv[1]);
@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     cudaMalloc(&data_batch_d, num_samples * data_len * sizeof(double));
     cudaMalloc(&state_baseline_d, num_samples * state_len * sizeof(cuDoubleComplex));
     cudaMalloc(&state_tc_d, num_samples * state_len * sizeof(cuDoubleComplex));
-    
+
     std::vector<double> h_data(num_samples * data_len, 0.5);
     cudaMemcpy(data_batch_d, h_data.data(), num_samples * data_len * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemset(state_baseline_d, 0, num_samples * state_len * sizeof(cuDoubleComplex));
@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
     // 1. Run Baseline & Profile
     launch_iqp_encode_batch(data_batch_d, state_baseline_d, num_samples, state_len, num_qubits, data_len, enable_zz, 0);
     cudaDeviceSynchronize();
-    
+
     auto start_baseline = std::chrono::high_resolution_clock::now();
     launch_iqp_encode_batch(data_batch_d, state_baseline_d, num_samples, state_len, num_qubits, data_len, enable_zz, 0);
     cudaDeviceSynchronize();
@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
     // 2. Run TC Version & Profile
     launch_iqp_encode_tc(data_batch_d, state_tc_d, num_samples, state_len, num_qubits, enable_zz, 0);
     cudaDeviceSynchronize();
-    
+
     auto start_tc = std::chrono::high_resolution_clock::now();
     launch_iqp_encode_tc(data_batch_d, state_tc_d, num_samples, state_len, num_qubits, enable_zz, 0);
     cudaDeviceSynchronize();
@@ -111,7 +111,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Speedup:           " << (double)duration_baseline / duration_tc << "x" << std::endl;
     }
     std::cout << "Correctness Verification - Max Absolute Error: " << max_err << std::endl;
-    
+
     if (max_err < 1e-6) {
         std::cout << "[  PASSED  ] KernelBench.Correctness" << std::endl;
     } else {

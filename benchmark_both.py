@@ -21,23 +21,26 @@ import time
 import torch
 
 
-def generate_hadamard(n_qubits, device='cuda'):
+def generate_hadamard(n_qubits, device="cuda"):
     H1 = torch.tensor([[1.0, 1.0], [1.0, -1.0]], dtype=torch.float64, device=device)
     H = H1
     for _ in range(n_qubits - 1):
         H = torch.kron(H, H1)
     return H
 
+
 def matmul_kernel(A, H):
     return torch.matmul(A, H)
 
+
 compiled_matmul = torch.compile(matmul_kernel)
+
 
 def benchmark_pytorch(n_qubits, batch_size, use_compile=False):
     state_len = 2**n_qubits
     try:
-        A = torch.randn(batch_size, state_len, dtype=torch.float64, device='cuda')
-        H = generate_hadamard(n_qubits, device='cuda')
+        A = torch.randn(batch_size, state_len, dtype=torch.float64, device="cuda")
+        H = generate_hadamard(n_qubits, device="cuda")
     except RuntimeError:
         return "OOM"
 
@@ -63,9 +66,14 @@ def benchmark_pytorch(n_qubits, batch_size, use_compile=False):
     except Exception:
         return "OOM"
 
+
 def benchmark_qdp(n_qubits):
     try:
-        result = subprocess.run([r"qdp\qdp-kernels\build\bench_kernels.exe", str(n_qubits)], capture_output=True, text=True)
+        result = subprocess.run(
+            [r"qdp\qdp-kernels\build\bench_kernels.exe", str(n_qubits)],
+            capture_output=True,
+            text=True,
+        )
         match = re.search(r"Duration:\s+(\d+)\s+us", result.stdout)
         if match:
             ms = float(match.group(1)) / 1000.0
@@ -75,16 +83,19 @@ def benchmark_qdp(n_qubits):
     except Exception as e:
         return str(e)
 
+
 if __name__ == "__main__":
     batch = 128
     print("=" * 75)
-    print(f"{'Qubits':<8} | {'PyTorch Eager':<18} | {'PyTorch Compiled':<18} | {'Our QDP TC'}")
+    print(
+        f"{'Qubits':<8} | {'PyTorch Eager':<18} | {'PyTorch Compiled':<18} | {'Our QDP TC'}"
+    )
     print("-" * 75)
-    
+
     for n in [10, 12, 14, 15, 16]:
         qdp_tc = benchmark_qdp(n)
         pt_eager = benchmark_pytorch(n, batch, use_compile=False)
         pt_comp = benchmark_pytorch(n, batch, use_compile=True)
-        
+
         print(f"{n:<8} | {pt_eager:<18} | {pt_comp:<18} | {qdp_tc}")
     print("=" * 75)

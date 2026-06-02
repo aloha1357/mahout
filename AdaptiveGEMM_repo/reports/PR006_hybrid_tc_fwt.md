@@ -1,18 +1,18 @@
 # Pull Request: [Stage 5] TDD-6 Hybrid Architecture & Blocked TC-FWT Breakthrough
 
 ## 1. What Changed
-This PR fundamentally reconstructs the Fast Walsh-Hadamard Transform (FWHT) logic for Quantum State Preparation (IQP Encoding) by implementing the **TDD-6 Hybrid Architecture**. 
+This PR fundamentally reconstructs the Fast Walsh-Hadamard Transform (FWHT) logic for Quantum State Preparation (IQP Encoding) by implementing the **TDD-6 Hybrid Architecture**.
 
 Specifically, we:
 1. **Removed Warp Divergence**: Replaced `if ((x >> i) & 1U)` with a branchless FMA operation `(double)((x >> i) & 1U)` in phase generation.
 2. **Zero-Overhead Constant Memory**: Eliminated the in-kernel `pow` (SFU) calculation for normalization, replacing it with a pre-calculated CPU scalar passed directly to GPU Constant Registers.
-3. **Implemented Hybrid Routing**: 
+3. **Implemented Hybrid Routing**:
    - $N \le 12$ (Micro-blocks): Routed strictly to Pure SIMT Warp Shuffles and Shared Memory.
    - $N \ge 14$ (Macro-blocks): Routed to the INT8 Tensor Core Ozaki Engine.
 4. **Algorithmic Complexity Reduction (Blocked TC-FWT)**: For macro-blocks, we abandoned the naive $O(4^N)$ Massive GEMM. Instead, we implemented a Kronecker Product Decomposition, splitting $N$ (e.g., 14) into $n_1=7$ and $n_2=7$. The operation is now two smaller GEMMs with a memory transpose: $Y = ( (X \times H_{n2})^T \times H_{n1} )^T$. This reduces theoretical complexity from $O(4^N)$ to $O(N \cdot 2^N)$.
 
 ## 2. Why
-Our microkernel benchmarks (TDD-1 vs TDD-5) proved that forcing Tensor Cores on extreme micro-blocks ($16 \times 16$) is an anti-pattern (SIMT was 17x faster). Tensor Cores require macro-blocks to amortize the ALU reconstruction overhead of the Ozaki INT8 scheme. 
+Our microkernel benchmarks (TDD-1 vs TDD-5) proved that forcing Tensor Cores on extreme micro-blocks ($16 \times 16$) is an anti-pattern (SIMT was 17x faster). Tensor Cores require macro-blocks to amortize the ALU reconstruction overhead of the Ozaki INT8 scheme.
 Furthermore, the previous $O(4^N)$ GEMM was computationally explosive for $N \ge 14$. By decomposing the FWT via blocked Kronecker products, we retain the massive 660 TOPS INT8 throughput of the Tensor Cores while fundamentally shifting the algorithmic complexity to approach the theoretical $O(N \log N)$ of traditional FWT.
 
 ---
@@ -72,7 +72,7 @@ Furthermore, the previous $O(4^N)$ GEMM was computationally explosive for $N \ge
 ---
 
 ## 7. Remaining Bottleneck & Next Step
-**Current Bottleneck:** 
+**Current Bottleneck:**
 - Transpose Operations: The blocked TC-FWT requires intermediate batch transposes. Currently implemented naively in global memory.
 - Single GPU Memory Limits: While Matrix-Free execution avoids $34GB$ matrices, the state vector itself will eventually exceed VRAM at $N \approx 28$.
 

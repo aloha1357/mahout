@@ -19,23 +19,26 @@ import time
 import torch
 
 
-def generate_hadamard(n_qubits, device='cuda'):
+def generate_hadamard(n_qubits, device="cuda"):
     H1 = torch.tensor([[1.0, 1.0], [1.0, -1.0]], dtype=torch.float64, device=device)
     H = H1
     for _ in range(n_qubits - 1):
         H = torch.kron(H, H1)
     return H
 
+
 def matmul_kernel(A, H):
     return torch.matmul(A, H)
 
+
 compiled_matmul = torch.compile(matmul_kernel)
+
 
 def benchmark_pytorch(n_qubits, batch_size, use_compile=False):
     state_len = 2**n_qubits
     try:
-        A = torch.randn(batch_size, state_len, dtype=torch.float64, device='cuda')
-        H = generate_hadamard(n_qubits, device='cuda')
+        A = torch.randn(batch_size, state_len, dtype=torch.float64, device="cuda")
+        H = generate_hadamard(n_qubits, device="cuda")
     except RuntimeError:
         return "OOM"
 
@@ -58,6 +61,7 @@ def benchmark_pytorch(n_qubits, batch_size, use_compile=False):
         return f"{avg_time_ms:.2f} ms"
     except Exception:
         return "OOM"
+
 
 if __name__ == "__main__":
     batch = 128

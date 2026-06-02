@@ -14,13 +14,13 @@
 
 ### 2.2 即時矩陣生成 (On-the-fly Generation)
 *   **實作：** `ImplicitHadamardOzakiEngine`。
-*   **技術細節：** 
+*   **技術細節：**
     *   Hadamard 矩陣的值僅為 $+1$ 或 $-1$。
     *   利用 `__popcll(row & col) & 1` 結合位元運算，在 Tensor Core 載入 Fragment 的過程中「即時」生成這兩個值。
     *   這徹底消滅了 Hadamard 矩陣的 Global Memory 配置。
 
 ## 3. 混合路由系統 (Hybrid Routing Strategy)
-*   **實作邏輯：** 
+*   **實作邏輯：**
     *   **$N \le 12$：** 路由至 SIMT Warp-Shuffle (極速緩存)。
     *   **$N > 12$：** 路由至 Blocked TC-FWT (Tensor Core 暴力重組)。
 *   **貢獻：** 這解決了 $N=14, 15$ 在切換架構時的性能震盪問題。

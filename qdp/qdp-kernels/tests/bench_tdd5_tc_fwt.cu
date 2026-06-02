@@ -38,23 +38,23 @@ __global__ void warp_fwt_n4_kernel(double* state, size_t num_samples) {
     for (int d = 0; d < 4; ++d) {
         int mask = 1 << d;
         // active mask for the 16 threads
-        unsigned int active_mask = 0xffff << ((threadIdx.x / 16) * 16); 
+        unsigned int active_mask = 0xffff << ((threadIdx.x / 16) * 16);
         double other = __shfl_xor_sync(active_mask, val, mask);
-        
+
         if ((lane_id & mask) == 0) {
             val = val + other;
         } else {
             val = other - val;
         }
     }
-    
+
     state[idx] = val;
 }
 
 int main() {
     // We test N=4 (16 elements). We process 16 samples per Matrix block to form 16x16.
     // So 1 block = 16 samples. Let's do 1,048,576 samples (16M elements, ~134 MB)
-    size_t num_samples = 1024 * 1024; 
+    size_t num_samples = 1024 * 1024;
     size_t n_dim = 16;
     size_t total_elements = num_samples * n_dim;
     size_t bytes = total_elements * sizeof(double);
@@ -78,7 +78,7 @@ int main() {
     // ----------------------------------------------------
     int threads_warp = 256; // 16 samples per block
     int blocks_warp = (num_samples + 15) / 16;
-    
+
     // Warmup
     warp_fwt_n4_kernel<<<blocks_warp, threads_warp>>>(d_state, num_samples);
     cudaDeviceSynchronize();

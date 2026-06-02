@@ -43,7 +43,7 @@ __global__ void batch_transpose_kernel(const double* __restrict__ in, double* __
     __syncthreads();
 
     // Transposed block coordinates
-    x = blockIdx.y * TRANSPOSE_TILE_DIM + threadIdx.x; 
+    x = blockIdx.y * TRANSPOSE_TILE_DIM + threadIdx.x;
     y = blockIdx.x * TRANSPOSE_TILE_DIM + threadIdx.y;
 
     // Store from shared memory to global memory (coalesced)
@@ -56,7 +56,7 @@ __global__ void batch_transpose_kernel(const double* __restrict__ in, double* __
 
 void launch_batch_transpose(const double* d_in, double* d_out, int B, int rows, int cols) {
     dim3 block(TRANSPOSE_TILE_DIM, TRANSPOSE_BLOCK_ROWS, 1);
-    dim3 grid((cols + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM, 
+    dim3 grid((cols + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM,
               (rows + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM, B);
     batch_transpose_kernel<<<grid, block>>>(d_in, d_out, B, rows, cols);
 }
@@ -64,7 +64,7 @@ void launch_batch_transpose(const double* d_in, double* d_out, int B, int rows, 
 int main() {
     int n_qubits = 14;
     int batch_size = 128;
-    
+
     size_t state_len = 1ULL << n_qubits;
     size_t total_elements = batch_size * state_len;
     size_t bytes = total_elements * sizeof(double);
@@ -77,7 +77,7 @@ int main() {
 
     // Initialize with 1.0
     cudaMemset(d_state, 0, bytes); // For simplicity, just test execution time, not correctness here yet
-    
+
     std::cout << "==============================================================\n";
     std::cout << " TC-FWT Algorithmic Breakthrough Benchmark\n";
     std::cout << " N = " << n_qubits << ", Batch = " << batch_size << " (Total " << total_elements << " elements)\n";
@@ -95,7 +95,7 @@ int main() {
     // 1. OLD Approach: O(4^N) Massive GEMM
     // ----------------------------------------------------
     double norm = 1.0;
-    
+
     cudaEventRecord(start);
     engine.execute_implicit_hadamard(d_state, d_out_old, batch_size, state_len, state_len, norm);
     cudaEventRecord(stop);
@@ -114,11 +114,11 @@ int main() {
     int dim2 = 1 << n2;
 
     cudaEventRecord(start);
-    
+
     // Step 1: Z = X * H_{n2}
     // X is (B * dim1) x dim2. H is dim2 x dim2.
     engine.execute_implicit_hadamard(d_state, d_out_new, batch_size * dim1, dim2, dim2, 1.0);
-    
+
     // Step 2: Transpose Z to Z_T
     // Z is (B, dim1, dim2). Z_T is (B, dim2, dim1)
     launch_batch_transpose(d_out_new, d_temp, batch_size, dim1, dim2);
@@ -130,14 +130,14 @@ int main() {
     // Step 4: Transpose Y_T back to Y
     // Y_T is (B, dim2, dim1). Y is (B, dim1, dim2)
     launch_batch_transpose(d_out_new, d_temp, batch_size, dim2, dim1);
-    
+
     // Result is now in d_temp
-    
+
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&ms, start, stop);
     float new_time = ms;
-    
+
     std::cout << " [NEW] Blocked O(N 2^N) TC-FWT GEMM  : " << std::fixed << std::setprecision(3) << new_time << " ms\n";
 
     float speedup = old_time / new_time;

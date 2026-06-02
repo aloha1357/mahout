@@ -43,13 +43,13 @@ RUNNER_DIR="${HOME}/actions-runner"
 if [ ! -d "$RUNNER_DIR" ]; then
     mkdir -p "$RUNNER_DIR"
     cd "$RUNNER_DIR"
-    
+
     # Fetch latest runner version programmatically
     LATEST_RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' | sed 's/^v//')
     if [ -z "$LATEST_RUNNER_VERSION" ] || [ "$LATEST_RUNNER_VERSION" == "null" ]; then
         LATEST_RUNNER_VERSION="2.316.1" # Fallback to a recent version
     fi
-    
+
     echo "Downloading runner version $LATEST_RUNNER_VERSION..."
     curl -o actions-runner-linux-x64.tar.gz -L "https://github.com/actions/runner/releases/download/v${LATEST_RUNNER_VERSION}/actions-runner-linux-x64-${LATEST_RUNNER_VERSION}.tar.gz"
     tar xzf ./actions-runner-linux-x64.tar.gz

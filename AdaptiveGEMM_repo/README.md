@@ -6,7 +6,7 @@
 [![CMake](https://img.shields.io/badge/CMake-3.18%2B-064F8C.svg)](https://cmake.org/)
 [![CI](https://img.shields.io/badge/GitHub_Actions-enabled-2088FF.svg)](.github/workflows/ci.yml)
 
-> **Achieves ~67 TOPS effective INT8 throughput (28% peak Tensor Core) on RTX 4060,  
+> **Achieves ~67 TOPS effective INT8 throughput (28% peak Tensor Core) on RTX 4060,
 > delivering FP64-equivalent precision via Ozaki Scheme + CRT/RNS reconstruction.**
 
 **English** | [**中文**](#中文版)
@@ -245,7 +245,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 ## License
 
-Apache License 2.0 — permits academic, personal, and commercial use.  
+Apache License 2.0 — permits academic, personal, and commercial use.
 See [LICENSE](LICENSE) for full terms.
 
 ---

@@ -186,7 +186,7 @@ Tested on **Ubuntu WSL2** with `/usr/local/cuda` (CUDA 12.6, NCU 2024.3.2):
 | `iqp_phase_split_kernel` | Success |
 | `implicit_hadamard_ozaki_grid_kernel_implicit` (`OZAKI_NCU_PROFILE=1`) | **LaunchFailed** (same as Windows) |
 
-Repro script: `qdp/qdp-kernels/scripts/wsl_build_and_ncu.sh`  
+Repro script: `qdp/qdp-kernels/scripts/wsl_build_and_ncu.sh`
 Artifact: `qdp/qdp-kernels/reports/ncu_ozaki_grid_wsl.csv`
 
 **Docker Desktop (WSL2 GPU backend):** expect the same class of NCU failure for Ozaki MMA; use Docker for bench/CI, not as an NCU workaround on RTX 4060 + Windows host.

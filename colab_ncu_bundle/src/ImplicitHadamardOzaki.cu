@@ -70,10 +70,10 @@ __global__ void precompute_modulo_kernel_p26_implicit(const double* __restrict__
         double v = s[(size_t)m_idx * c + k_idx];
         int32_t iv = (v == 0.0) ? 0 : __double2int_rn(v * sh);
         size_t out_off = (size_t)( (m_idx / 128) * num_tiles_k + tile_k ) * 4096 + (m_idx % 128) * 32 + local_k;
-        for (int p = 0; p < 7; p++) { 
-            int32_t rem = iv % pr[p]; 
-            if (rem < 0) rem += pr[p]; 
-            d[p * padded_size + out_off] = (int8_t)rem; 
+        for (int p = 0; p < 7; p++) {
+            int32_t rem = iv % pr[p];
+            if (rem < 0) rem += pr[p];
+            d[p * padded_size + out_off] = (int8_t)rem;
         }
     }
 }
@@ -285,7 +285,7 @@ namespace ozaki {
 
 void ImplicitHadamardOzakiEngine::execute_implicit_hadamard(const double* d_A, double* d_C, int m, int n, int k, double norm_factor, cudaStream_t stream) {
     size_t padded_mk = (size_t)((m + 127) / 128) * ((k + 31) / 32) * 4096;
-    
+
     int8_t *dA8_h = nullptr;
     int *d_queue = nullptr;
 

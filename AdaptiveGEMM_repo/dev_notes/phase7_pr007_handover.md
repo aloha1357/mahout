@@ -195,5 +195,5 @@ Reviewer 要的是 **Performance Attribution**，不是「每顆 kernel 都有 N
 
 ---
 
-**Handover status:** NCU partial（side kernels OK on Win+WSL）| Grid profiling kernel shipped | Ozaki MMA NCU blocked on consumer GPU + host driver stack  
+**Handover status:** NCU partial（side kernels OK on Win+WSL）| Grid profiling kernel shipped | Ozaki MMA NCU blocked on consumer GPU + host driver stack
 **Updated:** 2026-06-02（含 WSL2 實測）

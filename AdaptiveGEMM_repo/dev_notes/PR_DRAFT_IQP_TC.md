@@ -1,7 +1,7 @@
 # Pull Request: High-Performance Matrix-Free IQP Encoding via INT8 Tensor Cores
 
 ## 🚀 Motivation
-The current implementation of IQP (Instantaneous Quantum Polynomial) encoding relies on PyTorch's dense matrix multiplication (`cuBLAS`) for generating state vectors. While this is fast for very small qubit counts ($N \le 12$), it fundamentally hits a "Memory Wall." 
+The current implementation of IQP (Instantaneous Quantum Polynomial) encoding relies on PyTorch's dense matrix multiplication (`cuBLAS`) for generating state vectors. While this is fast for very small qubit counts ($N \le 12$), it fundamentally hits a "Memory Wall."
 
 For example, at $N=16$, the dense Hadamard matrix requires **34.3 GB** of continuous VRAM (FP64). This causes immediate Out-Of-Memory (OOM) crashes on consumer GPUs (like the RTX 4090 with 24GB VRAM) and even limits enterprise hardware. We needed a solution that escapes the memory bound and relies purely on computational power.
 

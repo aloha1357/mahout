@@ -58,10 +58,10 @@ __device__ __forceinline__ size_t get_B8_offset(int n_idx, int k_idx, int n, int
     return (size_t)(tile_n * num_tiles_k + tile_k) * 2048 + (local_n << 5) + local_k;
 }
 
-__device__ __forceinline__ double fp64_hi(double v, int split_bits) {      
+__device__ __forceinline__ double fp64_hi(double v, int split_bits) {
     double scale = pow2_int(split_bits);
     double scaled = v * scale;
-    double high_scaled = static_cast<double>(__double2ll_rn(scaled));      
+    double high_scaled = static_cast<double>(__double2ll_rn(scaled));
     return high_scaled / scale;
 }
 
@@ -93,8 +93,8 @@ __device__ __forceinline__ void ldmatrix_x2_int8(uint32_t* d, void* smem_ptr) {
 
 AdaptiveOzakiEngine::AdaptiveOzakiEngine(const OzakiConfig& config) : config_(config) {
 }
-AdaptiveOzakiEngine::~AdaptiveOzakiEngine() { 
-    freeWorkspace(); 
+AdaptiveOzakiEngine::~AdaptiveOzakiEngine() {
+    freeWorkspace();
 }
 
 void AdaptiveOzakiEngine::allocateWorkspace(int m, int n, int k) {
@@ -102,12 +102,12 @@ void AdaptiveOzakiEngine::allocateWorkspace(int m, int n, int k) {
     int nm = (m + 127) / 128, nn = (n + 127) / 128;
     cudaMalloc(&dmA_h, nm * 8); cudaMalloc(&dmA_l, nm * 8);
     cudaMalloc(&dmB_h, nn * 8); cudaMalloc(&dmB_l, nn * 8);
-    
+
     size_t padded_mk = (size_t)((m + 127) / 128) * ((k + 31) / 32) * 4096;
     size_t padded_kn = (size_t)((n + 63) / 64) * ((k + 31) / 32) * 2048;
     cudaMalloc(&dA8_h, 7ULL * padded_mk); cudaMalloc(&dA8_l, 7ULL * padded_mk);
     cudaMalloc(&dB8_h, 7ULL * padded_kn); cudaMalloc(&dB8_l, 7ULL * padded_kn);
-    
+
     size_t mk = (size_t)m * k;
     size_t kn = (size_t)k * n;
     cudaMalloc(&dA_hi_f32, mk * sizeof(float));
@@ -156,7 +156,7 @@ __global__ void precompute_modulo_kernel(const double* __restrict__ s, int8_t* _
             if (m == 0) iv = __double2int_rn(v * sh);
             else iv = __double2int_rn((v - (double)__double2ll_rn(v * sh) / sh) * sl);
         }
-        
+
         size_t out_off = (size_t)( (m_idx / 128) * num_tiles_k + tile_k ) * 4096 + (m_idx % 128) * 32 + local_k;
         for (int p = 0; p < 7; p++) {
             int32_t rem = iv % pr[p];
@@ -190,7 +190,7 @@ __global__ void precompute_modulo_kernel_B(const double* __restrict__ s, int8_t*
             if (m == 0) iv = __double2int_rn(v * sh);
             else iv = __double2int_rn((v - (double)__double2ll_rn(v * sh) / sh) * sl);
         }
-        
+
         size_t out_off = (size_t)( (n_idx / 64) * num_tiles_k + tile_k ) * 2048 + (n_idx % 64) * 32 + local_k;
         for (int p = 0; p < 7; p++) {
             int32_t rem = iv % pr[p];
@@ -255,7 +255,7 @@ __global__ void compute_slice_max_kernel(const double* __restrict__ A, const dou
                 int r = idx / c_limit_half;
                 int c_half = idx % c_limit_half;
                 int c = c_half * 2;
-                
+
                 if (c + 1 < c_limit) {
                     double2 v2 = *(const double2*)&B[(size_t)r * n + cb + c];
                     if (v2.x != 0.0) {
@@ -368,20 +368,20 @@ __global__ void accumulate_cross_terms_tf32_kernel(const float* __restrict__ A, 
     wmma::fragment<wmma::matrix_a, 16, 16, 8, wmma::precision::tf32, wmma::row_major> a;
     wmma::fragment<wmma::matrix_b, 16, 16, 8, wmma::precision::tf32, wmma::col_major> b;
     wmma::fragment<wmma::accumulator, 16, 16, 8, float> c;
-    
+
     __shared__ float sa[16][8];
     __shared__ float sb[16][8];
     __shared__ float sc[16][16];
-    
+
     int lane = threadIdx.x;
-    
+
     // Chunking to prevent FP32 accumulator swamping
     const int CHUNK_SIZE = 256;
-    
+
     for (int chunk_start = 0; chunk_start < k; chunk_start += CHUNK_SIZE) {
         wmma::fill_fragment(c, 0.0f);
         int chunk_end = min(chunk_start + CHUNK_SIZE, k);
-        
+
         for (int ck = chunk_start; ck < chunk_end; ck += 8) {
             for (int i = 0; i < 4; ++i) {
                 int idx = i * 32 + lane;
@@ -389,23 +389,23 @@ __global__ void accumulate_cross_terms_tf32_kernel(const float* __restrict__ A, 
                 int col_a = idx % 8;
                 if (rb + row_a < m && ck + col_a < k) sa[row_a][col_a] = A[(size_t)(rb + row_a) * k + ck + col_a];
                 else sa[row_a][col_a] = 0.0f;
-                
+
                 int row_b = idx / 16;
                 int col_b = idx % 16;
                 if (ck + row_b < k && cb + col_b < n) sb[col_b][row_b] = B[(size_t)(ck + row_b) * n + cb + col_b];
                 else sb[col_b][row_b] = 0.0f;
             }
             __syncthreads();
-            
+
             wmma::load_matrix_sync(a, &sa[0][0], 8);
             wmma::load_matrix_sync(b, &sb[0][0], 8);
             wmma::mma_sync(c, a, b, c);
             __syncthreads();
         }
-        
+
         wmma::store_matrix_sync(&sc[0][0], c, 16, wmma::mem_row_major);
         __syncthreads();
-        
+
         for (int i = 0; i < 8; ++i) {
             int idx = i * 32 + lane;
             int r = idx / 16;
@@ -424,7 +424,7 @@ __global__ void accumulate_cross_terms_fp32_cc_kernel(const double* A, const dou
     if (row < m && col < n) {
         double sum = 0.0;
         for (int kk = 0; kk < k; ++kk) {
-            sum += static_cast<double>(static_cast<float>(A[(size_t)row * k + kk])) * 
+            sum += static_cast<double>(static_cast<float>(A[(size_t)row * k + kk])) *
                    static_cast<double>(static_cast<float>(B[(size_t)kk * n + col]));
         }
         atomicAdd(&C[(size_t)row * n + col], sum * scale);
@@ -621,13 +621,13 @@ void AdaptiveOzakiEngine::profileHardwareRatio() {
     double throughput_fp32 = 32.0 / ms_fp32;
     double throughput_int32 = 32.0 / ms_int32;
     double throughput_fp64 = 32.0 / ms_fp64;
-    
+
     ratio_fp64_tc = throughput_fp64 / throughput_tc;
     ratio_fp32_tc = throughput_fp32 / throughput_tc;
     ratio_fp16_tc = throughput_fp16 / throughput_tc;
     ratio_tf32_tc = throughput_tf32 / throughput_tc;
     ratio_int32_tc = throughput_int32 / throughput_tc;
-    
+
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
     cudaFree(d_fp64);
@@ -636,7 +636,7 @@ void AdaptiveOzakiEngine::profileHardwareRatio() {
     cudaFree(d_fp16);
     cudaFree(d_tf32);
     cudaFree(d_int32);
-    
+
     std::cout << "[AdaptiveOzaki Phase 24] Hardware Profile (vs INT8 TC):\n";
     std::cout << "  - FP16 TC: " << (1.0 / ratio_fp16_tc) << "x slower (Alpha: " << ratio_fp16_tc << ")\n";
     std::cout << "  - TF32 TC: " << (1.0 / ratio_tf32_tc) << "x slower (Alpha: " << ratio_tf32_tc << ")\n";
@@ -690,7 +690,7 @@ __device__ __forceinline__ void crt_pass_kernel_body(const int8_t* __restrict__ 
     __shared__ alignas(16) int8_t sa[2][128][48], sb[2][64][48];
     uint64_t final_weighted_sum[2][4][4];
     for (int i = 0; i < 2; i++) for (int j = 0; j < 4; j++) for (int r = 0; r < 4; r++) final_weighted_sum[i][j][r] = 0;
-    
+
     M = d_M_arr[nl]; int off = d_coeff_offsets[nl];
 
     size_t padded_mk = (size_t)((m + 127) / 128) * ((k + 31) / 32) * 4096;
@@ -798,7 +798,7 @@ void hetero_crt_pass_kernel(const int8_t* __restrict__ A8, const int8_t* __restr
     if (fp64_kernel && pass == 0) {
         int rb = blockIdx.y * 128, cb = blockIdx.x * 64; // Note cb is * 64 now (since C tile is 128x64) Wait! In hetero_crt_pass_kernel it was cb = blockIdx.x * 128. Let me fix the grid.
         int tid = threadIdx.x, lane = tid % 32, wid = tid / 32;
-        int wm = wid / 2, wn = wid % 2, ms = wm * 16, ns = wn * 32;        
+        int wm = wid / 2, wn = wid % 2, ms = wm * 16, ns = wn * 32;
         // Only let the designated fp64 warps perform FP64 hi*hi accumulation
         bool fp64_active = (cfg.warp_fp64 > 0) ? (wid >= 0 && wid < cfg.warp_fp64) : true;
         if (fp64_active) {
@@ -896,7 +896,7 @@ __global__ void hybrid_ozaki_persistent_kernel(
     int warp_id = threadIdx.x / 32, lane_id = threadIdx.x % 32;
     __shared__ int tile_idx;
     int total_tiles_m = (m + 63) / 64, total_tiles_n = (n + 63) / 64, total_tiles = total_tiles_m * total_tiles_n;
-    
+
     const int pr[7] = {127, 113, 109, 107, 103, 101, 97};
     const uint64_t M = 168897325606883ULL;
     const uint64_t f[7] = {
@@ -911,7 +911,7 @@ __global__ void hybrid_ozaki_persistent_kernel(
         int ct = tile_idx; if (ct >= total_tiles) break;
         int tile_m = (ct % total_tiles_m) * 64, tile_n = (ct / total_tiles_m) * 64;
 
-        uint64_t final_acc[8][4]; 
+        uint64_t final_acc[8][4];
         for(int i=0; i<8; i++) for(int j=0; j<4; j++) final_acc[i][j] = 0;
 
         int32_t prime_acc[7][8][4];
@@ -931,7 +931,7 @@ __global__ void hybrid_ozaki_persistent_kernel(
             for (int p = 0; p < 7; ++p) {
                 const int8_t* Ap = A8_h + p * padded_mk;
                 const int8_t* Bp = B8_h + p * padded_kn;
-                
+
                 for (int i = threadIdx.x; i < 64 * k_size; i += 256) {
                     int r = i / k_size, c = i % k_size;
                     int8_t val = (tile_m + r < m && kk + c < k) ? Ap[get_A8_offset(tile_m + r, kk + c, m, k)] : 0;
@@ -956,11 +956,11 @@ __global__ void hybrid_ozaki_persistent_kernel(
             if (warp_id < 4) {
                 int wr = warp_id / 2;
                 int wc = warp_id % 2;
-                
+
                 for (int p = 0; p < 7; ++p) {
                     int8_t* pA = &sA8[p * 4096 + b_idx * 2048];
                     int8_t* pB = &sB8[p * 4096 + b_idx * 2048];
-                    
+
                     #pragma unroll
                     for (int k_s = 0; k_s < 32; k_s += 32) {
                         #pragma unroll
@@ -968,7 +968,7 @@ __global__ void hybrid_ozaki_persistent_kernel(
                             #pragma unroll
                             for (int nt = 0; nt < 4; ++nt) {
                                 uint32_t ra[4], rb[2];
-                                
+
                                 int r_a_0 = lane_id / 4;
                                 int r_a_8 = r_a_0 + 8;
                                 int k_base_a = (lane_id % 4) * 8;
@@ -998,7 +998,7 @@ __global__ void hybrid_ozaki_persistent_kernel(
                                 final_va3 |= ((uint32_t)(uint8_t)pA[r8 * 32 + c_a + 7]) << 24;
 
                                 ra[0] = final_va0; ra[1] = final_va1; ra[2] = final_va2; ra[3] = final_va3;
-                                
+
                                 int cb_base = wc * 32 + nt * 8;
                                 int n_col = lane_id / 4;
                                 int k_base = (lane_id % 4) * 8;
@@ -1078,7 +1078,7 @@ __global__ void hybrid_ozaki_persistent_kernel(
                 int mt = i / 4, nt = i % 4;
                 int r_base = tile_m + wr * 32 + mt * 16 + (lane_id / 4);
                 int c_base = tile_n + wc * 32 + nt * 8 + (lane_id % 4) * 2;
-                
+
                 uint64_t cv0 = final_acc[i][0];
                 uint64_t cv1 = final_acc[i][1];
                 uint64_t cv2 = final_acc[i][2];
@@ -1106,7 +1106,7 @@ __global__ void hybrid_ozaki_persistent_kernel(
                 float temp[16*16];
                 nvcuda::wmma::store_matrix_sync(temp, c_frag_tf32[i][j], 16, nvcuda::wmma::mem_row_major);
                 for(int r=0; r<16; r++) for(int c=0; c<16; c++) {
-                    if(r_c + r < m && c_c + c < n) atomicAdd(&C[(size_t)(r_c+r)*n + c_c+c], (double)temp[r*16+c]);  
+                    if(r_c + r < m && c_c + c < n) atomicAdd(&C[(size_t)(r_c+r)*n + c_c+c], (double)temp[r*16+c]);
                 }
             }
         }
@@ -1123,13 +1123,13 @@ void AdaptiveOzakiEngine::execute(const double* dA, const double* dB, double* dC
         cudaStream_t st; cudaStreamCreate(&st);
         split_high_low_kernel<<<((size_t)m*k+255)/256, 256, 0, st>>>(dA, nullptr, nullptr, dA_hi_f32, dA_low_f32, (int)(m*k), config_.split_fp64_bits);
         split_high_low_kernel<<<((size_t)k*n+255)/256, 256, 0, st>>>(dB, nullptr, nullptr, dB_hi_f32, dB_low_f32, (int)(k*n), config_.split_fp64_bits);
-        
+
         dim3 pre_block(32, 32);
         dim3 pre_grid_A((k + 31) / 32, ((m + 127) / 128) * 4);
         dim3 pre_grid_B(((n + 63) / 64) * 2, (k + 31) / 32);
         precompute_modulo_kernel_p26<<<pre_grid_A, pre_block, 0, st>>>(dA, dA8_h, m, k, 0, pow(2.0,15.0), pow(2.0,30.0));
         precompute_modulo_kernel_B_p26<<<pre_grid_B, pre_block, 0, st>>>(dB, dB8_h, k, n, 0, pow(2.0,15.0), pow(2.0,30.0));
-        
+
         int num_sms; cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, 0);
         cudaMemsetAsync(d_global_work_queue, 0, sizeof(int), st);
         cudaFuncSetAttribute(hybrid_ozaki_persistent_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, 96*1024);
@@ -1138,11 +1138,11 @@ void AdaptiveOzakiEngine::execute(const double* dA, const double* dB, double* dC
         return;
     }
     profileHardwareRatio();
-    
+
     OzakiConfig local_cfg = config_;
     int max_fp64_cells = (int)(8192.0 / 7.0 * ratio_fp64_tc);
     bool do_fp64_kernel = (local_cfg.mode == ExecutionMode::Phase23Hetero && local_cfg.enable_fp64 && local_cfg.enable_kernel_fp64);
-    
+
     if (do_fp64_kernel && max_fp64_cells < 32) {
         static bool printed_dispatch = false;
         if (!printed_dispatch) {
@@ -1349,4 +1349,4 @@ void AdaptiveOzakiEngine::accumulateFusedSlicedProductWMMA(const double* d_A, co
     accumulate_fused_kernel<<<grid, block>>>(d_A, d_B, d_C, m, n, k, scale);
 }
 
-} 
+}

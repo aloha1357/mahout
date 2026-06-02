@@ -22,7 +22,7 @@ import pytest
 def test_gpu_gemm_accuracy():
     np.random.seed(42)
     n = 256
-    
+
     # Generate random double precision matrices
     A = np.random.uniform(-1.0, 1.0, (n, n)).astype(np.float64)
     B = np.random.uniform(-1.0, 1.0, (n, n)).astype(np.float64)
@@ -35,7 +35,14 @@ def test_gpu_gemm_accuracy():
     C_gpu = engine.gemm(A, B)
 
     # Verify maximum error is within expected tolerance
-    np.testing.assert_allclose(C_gpu, C_ref, rtol=1e-5, atol=1e-8, err_msg="GPU GEMM result differs from NumPy reference")
+    np.testing.assert_allclose(
+        C_gpu,
+        C_ref,
+        rtol=1e-5,
+        atol=1e-8,
+        err_msg="GPU GEMM result differs from NumPy reference",
+    )
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

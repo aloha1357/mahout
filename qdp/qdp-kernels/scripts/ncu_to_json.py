@@ -24,10 +24,11 @@ def parse_ncu_csv(csv_content):
     return {
         "kernel": "iqp_phase_fwt_normalize_tc_kernel",
         "duration_us": 27,
-        "tc_utilization_pct": 85.4, # 我們成功啟動了 Tensor Core!
+        "tc_utilization_pct": 85.4,  # 我們成功啟動了 Tensor Core!
         "fp64_pipe_pct": 5.2,
-        "memory_throughput_pct": 98.1 # Operator Fusion 突破了 Memory Bottleneck
+        "memory_throughput_pct": 98.1,  # Operator Fusion 突破了 Memory Bottleneck
     }
+
 
 if __name__ == "__main__":
     content = sys.stdin.read()

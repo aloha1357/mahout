@@ -2,7 +2,7 @@
 
 ## 1. Context & Goal (專案背景與當前目標)
 *   **目前處於哪個研發階段？** Phase 24 (ExtremeMix) 與 Phase 26 (HybridOzaki) 的深度效能調優階段。
-*   **最主要的目標是什麼？** 
+*   **最主要的目標是什麼？**
     本次最佳化完全依據 **Nsight Compute (ncu)** 的 Profiling 數據進行。主要為了解決兩大瓶頸：
     1.  `precompute_modulo_kernel` 在前次改版後因記憶體非連續寫入 (Uncoalesced Global Memory Writes) 導致耗時暴增至 50ms。
     2.  `decoupled_crt_pass_kernel` 面臨極端的 Register Pressure (每 Thread > 128 Registers)，導致 SM 理論佔用率 (Theoretical Occupancy) 被卡死在 33.33%，無法有效隱藏記憶體延遲。
@@ -73,7 +73,7 @@
 在 Roofline 圖表中，核心落點正處於 **Memory-Bound 與 Compute-Bound 的交界處**。這代表目前的 Tiled Layout 已經將記憶體效能壓榨到了極致 (70%+)，若要再進一步提升 GFLOPS，必須針對 Shared Memory 的 Bank Conflict (目前仍有 ~58% 的 Excessive Wavefronts) 與 L2 存取模式進行更細緻的微調。
 
 ## 6. CI / Self-hosted Runner 執行規範 (重要)
-**每次 Commit / Push 時，GitHub Actions 包含了 GPU 實機驗證的環節。** 
+**每次 Commit / Push 時，GitHub Actions 包含了 GPU 實機驗證的環節。**
 由於 GitHub 官方的 Runner 沒有配備我們要測試的 Ada Tensor Core GPU，因此專案設定了 `self-hosted` 標籤來依賴您本地的機器：
 *   **本地 Linux 啟動要求**：在推送 (Push) 程式碼至 `public-release` 或 `main` 之前或當下，**必須確保本地端的 WSL Ubuntu (Linux) 已啟動，並且運行了 GitHub Actions Runner**。
 *   **啟動方式**：進入 WSL 的 `~/actions-runner` 資料夾，並執行 `./run.sh`。若未開啟，CI 的 `gpu-validate` 階段將會一直卡在 `Queued` 等待中。

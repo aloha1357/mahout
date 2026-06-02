@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     cudaMalloc(&data_batch_d, num_samples * data_len * sizeof(double));
     cudaMalloc(&state_baseline_d, num_samples * state_len * sizeof(cuDoubleComplex));
     cudaMalloc(&state_tc_d, num_samples * state_len * sizeof(cuDoubleComplex));
-    
+
     // Fill data with some dummy values
     std::vector<double> h_data(num_samples * data_len, 0.5);
     cudaMemcpy(data_batch_d, h_data.data(), num_samples * data_len * sizeof(double), cudaMemcpyHostToDevice);
@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
     // 2. Run TC Version & Profile
     launch_iqp_encode_tc(data_batch_d, state_tc_d, num_samples, state_len, num_qubits, enable_zz, 0);
     cudaDeviceSynchronize();
-    
+
     auto start = std::chrono::high_resolution_clock::now();
     launch_iqp_encode_tc(data_batch_d, state_tc_d, num_samples, state_len, num_qubits, enable_zz, 0);
     cudaDeviceSynchronize();
@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Bench execution complete. Duration: " << duration << " us" << std::endl;
     std::cout << "Correctness Verification - Max Absolute Error: " << max_err << std::endl;
-    
+
     if (max_err < 1e-6) {
         std::cout << "[  PASSED  ] KernelBench.Correctness" << std::endl;
     } else {
