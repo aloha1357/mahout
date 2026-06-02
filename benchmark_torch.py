@@ -14,11 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-import time
-import subprocess
-import re
 import os
+import re
+import subprocess
+import time
+
+import torch
 
 # Configuration
 BATCH_SIZE = 128
@@ -28,7 +29,7 @@ DEVICE = 'cuda'
 def get_gpu_name():
     try:
         return torch.cuda.get_device_name(0)
-    except:
+    except Exception:
         return "Unknown GPU"
 
 def generate_hadamard(n_qubits, device='cuda'):
@@ -115,7 +116,7 @@ def benchmark_our_engine(n_qubits, batch_size):
             return "Parse Error"
     except subprocess.TimeoutExpired:
         return "Timeout"
-    except Exception as e:
+    except Exception:
         return "Error"
 
 def main():

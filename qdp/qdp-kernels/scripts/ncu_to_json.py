@@ -14,8 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 import json
+import sys
+
 
 def parse_ncu_csv(csv_content):
     # 此為 TDD 模擬。真實情境下會解析來自 Nsight Compute (ncu) 的 csv 或 log 內容。

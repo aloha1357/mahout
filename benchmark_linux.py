@@ -14,8 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import time
+
+import torch
+
 
 def generate_hadamard(n_qubits, device='cuda'):
     H1 = torch.tensor([[1.0, 1.0], [1.0, -1.0]], dtype=torch.float64, device=device)
@@ -34,7 +36,7 @@ def benchmark_pytorch(n_qubits, batch_size, use_compile=False):
     try:
         A = torch.randn(batch_size, state_len, dtype=torch.float64, device='cuda')
         H = generate_hadamard(n_qubits, device='cuda')
-    except RuntimeError as e:
+    except RuntimeError:
         return "OOM"
 
     kernel = compiled_matmul if use_compile else matmul_kernel
@@ -43,7 +45,7 @@ def benchmark_pytorch(n_qubits, batch_size, use_compile=False):
         for _ in range(3):
             _ = kernel(A, H)
         torch.cuda.synchronize()
-    except Exception as e:
+    except Exception:
         return "Failed/OOM"
 
     start_time = time.perf_counter()

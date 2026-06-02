@@ -14,9 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import adaptive_gemm_py
 import numpy as np
 import pytest
-import adaptive_gemm_py
+
 
 def test_gpu_gemm_accuracy():
     np.random.seed(42)
