@@ -1,0 +1,14 @@
+==PROF== Connected to process 17704 (D:\D_backup\2025\tum\26S\apache_mout\qdp\qdp-kernels\build\bench_kernels.exe)
+
+==ERROR== LaunchFailed
+==PROF== Trying to shutdown target application
+==ERROR== An error occurred while trying to profile.
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","Section Name","Metric Name","Metric Unit","Metric Value"
+"0","17704","bench_kernels.exe","127.0.0.1","void implicit_hadamard_ozaki_grid_kernel_implicit<1>(const signed char *, double *, int, int, int, double, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","dram__throughput.avg.pct_of_peak_sustained_elapsed","%","nan"
+"0","17704","bench_kernels.exe","127.0.0.1","void implicit_hadamard_ozaki_grid_kernel_implicit<1>(const signed char *, double *, int, int, int, double, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","gpu__time_duration.sum","ns","nan"
+"0","17704","bench_kernels.exe","127.0.0.1","void implicit_hadamard_ozaki_grid_kernel_implicit<1>(const signed char *, double *, int, int, int, double, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","launch__registers_per_thread","","n/a"
+"0","17704","bench_kernels.exe","127.0.0.1","void implicit_hadamard_ozaki_grid_kernel_implicit<1>(const signed char *, double *, int, int, int, double, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","launch__shared_mem_per_block","","n/a"
+"0","17704","bench_kernels.exe","127.0.0.1","void implicit_hadamard_ozaki_grid_kernel_implicit<1>(const signed char *, double *, int, int, int, double, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","lts__throughput.avg.pct_of_peak_sustained_elapsed","%","nan"
+"0","17704","bench_kernels.exe","127.0.0.1","void implicit_hadamard_ozaki_grid_kernel_implicit<1>(const signed char *, double *, int, int, int, double, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","sm__pipe_tensor_active.avg.pct_of_peak_sustained_active","","n/a"
+"0","17704","bench_kernels.exe","127.0.0.1","void implicit_hadamard_ozaki_grid_kernel_implicit<1>(const signed char *, double *, int, int, int, double, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","sm__throughput.avg.pct_of_peak_sustained_elapsed","%","nan"
+"0","17704","bench_kernels.exe","127.0.0.1","void implicit_hadamard_ozaki_grid_kernel_implicit<1>(const signed char *, double *, int, int, int, double, double)","1","7","(0, 0, 0)","(0, 0, 0)","0","8.9","Command line profiler metrics","smsp__warps_active.avg.pct_of_peak_sustained_active","%","nan"

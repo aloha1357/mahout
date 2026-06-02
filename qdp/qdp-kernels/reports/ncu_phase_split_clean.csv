@@ -1,0 +1,13 @@
+==PROF== Connected to process 12256 (D:\D_backup\2025\tum\26S\apache_mout\qdp\qdp-kernels\build\bench_kernels.exe)
+Bench execution complete. Duration: 142 us
+Correctness Verification - Max Absolute Error: 0
+[  PASSED  ] KernelBench.Correctness
+==PROF== Disconnected from process 12256
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","Section Name","Metric Name","Metric Unit","Metric Value"
+"0","12256","bench_kernels.exe","127.0.0.1","iqp_phase_split_kernel(const double *, double *, double *, unsigned long long, unsigned long long, unsigned int, unsigned int, int)","1","7","(256, 1, 1)","(64, 1, 1)","0","8.9","Command line profiler metrics","dram__throughput.avg.pct_of_peak_sustained_elapsed","%","0.42"
+"0","12256","bench_kernels.exe","127.0.0.1","iqp_phase_split_kernel(const double *, double *, double *, unsigned long long, unsigned long long, unsigned int, unsigned int, int)","1","7","(256, 1, 1)","(64, 1, 1)","0","8.9","Command line profiler metrics","gpu__time_duration.sum","ns","12,736"
+"0","12256","bench_kernels.exe","127.0.0.1","iqp_phase_split_kernel(const double *, double *, double *, unsigned long long, unsigned long long, unsigned int, unsigned int, int)","1","7","(256, 1, 1)","(64, 1, 1)","0","8.9","Command line profiler metrics","launch__registers_per_thread","register/thread","60"
+"0","12256","bench_kernels.exe","127.0.0.1","iqp_phase_split_kernel(const double *, double *, double *, unsigned long long, unsigned long long, unsigned int, unsigned int, int)","1","7","(256, 1, 1)","(64, 1, 1)","0","8.9","Command line profiler metrics","launch__shared_mem_per_block","byte/block","1,024"
+"0","12256","bench_kernels.exe","127.0.0.1","iqp_phase_split_kernel(const double *, double *, double *, unsigned long long, unsigned long long, unsigned int, unsigned int, int)","1","7","(256, 1, 1)","(64, 1, 1)","0","8.9","Command line profiler metrics","lts__throughput.avg.pct_of_peak_sustained_elapsed","%","2.27"
+"0","12256","bench_kernels.exe","127.0.0.1","iqp_phase_split_kernel(const double *, double *, double *, unsigned long long, unsigned long long, unsigned int, unsigned int, int)","1","7","(256, 1, 1)","(64, 1, 1)","0","8.9","Command line profiler metrics","sm__throughput.avg.pct_of_peak_sustained_elapsed","%","67.52"
+"0","12256","bench_kernels.exe","127.0.0.1","iqp_phase_split_kernel(const double *, double *, double *, unsigned long long, unsigned long long, unsigned int, unsigned int, int)","1","7","(256, 1, 1)","(64, 1, 1)","0","8.9","Command line profiler metrics","smsp__warps_active.avg.pct_of_peak_sustained_active","%","37.51"
