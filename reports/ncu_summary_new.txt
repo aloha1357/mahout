@@ -1,0 +1,44 @@
+PR007 NCU Summary ¡X Regenerated 2026-06-02
+GPU: RTX 4060 (SM 8.9, WDDM) | NCU 2024.3.0.0 | CUDA 13.0
+
+Baseline FWT
+------------
+  DRAM throughput: 33.03785714285714
+  L2 throughput: 10.404285714285715
+  SM throughput: 10.211428571428572
+  Warps active: 22.03
+  Registers / thread: 28.0
+  Shared memory / block: 1024.0
+  Kernel duration (ns): 3216.0
+
+Phase Split
+-----------
+  DRAM throughput: 0.45
+  L2 throughput: 2.29
+  SM throughput: 67.54
+  Warps active: 37.17
+  Registers / thread: 60.0
+  Shared memory / block: 1024.0
+  Kernel duration (ns): 12736.0
+
+Modulo Precompute
+-----------------
+  DRAM throughput: 17.57
+  L2 throughput: 5.36
+  SM throughput: 16.17
+  Warps active: 57.64
+  Registers / thread: 28.0
+  Shared memory / block: 1024.0
+  Kernel duration (ns): 3104.0
+
+Ozaki Grid (Attempt)
+--------------------
+  DRAM throughput: N/A
+  L2 throughput: N/A
+  SM throughput: N/A
+  Warps active: N/A
+  Registers / thread: N/A
+  Shared memory / block: N/A
+  Kernel duration (ns): N/A
+  Tensor Core active: N/A
+

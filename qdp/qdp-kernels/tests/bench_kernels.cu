@@ -28,7 +28,7 @@ extern "C" int launch_iqp_encode_tc(
 );
 
 int main(int argc, char* argv[]) {
-    size_t num_samples = 128; // Reduced batch size for larger qubits to fit memory
+    size_t num_samples = 128; 
     unsigned int num_qubits = 14;
     if (argc > 1) {
         num_qubits = std::atoi(argv[1]);
@@ -49,25 +49,30 @@ int main(int argc, char* argv[]) {
     cudaMalloc(&state_baseline_d, num_samples * state_len * sizeof(cuDoubleComplex));
     cudaMalloc(&state_tc_d, num_samples * state_len * sizeof(cuDoubleComplex));
     
-    // Fill data with some dummy values
     std::vector<double> h_data(num_samples * data_len, 0.5);
     cudaMemcpy(data_batch_d, h_data.data(), num_samples * data_len * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemset(state_baseline_d, 0, num_samples * state_len * sizeof(cuDoubleComplex));
     cudaMemset(state_tc_d, 0, num_samples * state_len * sizeof(cuDoubleComplex));
 
-    // 1. Run Baseline
+    // 1. Run Baseline & Profile
     launch_iqp_encode_batch(data_batch_d, state_baseline_d, num_samples, state_len, num_qubits, data_len, enable_zz, 0);
     cudaDeviceSynchronize();
+    
+    auto start_baseline = std::chrono::high_resolution_clock::now();
+    launch_iqp_encode_batch(data_batch_d, state_baseline_d, num_samples, state_len, num_qubits, data_len, enable_zz, 0);
+    cudaDeviceSynchronize();
+    auto end_baseline = std::chrono::high_resolution_clock::now();
+    auto duration_baseline = std::chrono::duration_cast<std::chrono::microseconds>(end_baseline - start_baseline).count();
 
     // 2. Run TC Version & Profile
     launch_iqp_encode_tc(data_batch_d, state_tc_d, num_samples, state_len, num_qubits, enable_zz, 0);
     cudaDeviceSynchronize();
     
-    auto start = std::chrono::high_resolution_clock::now();
+    auto start_tc = std::chrono::high_resolution_clock::now();
     launch_iqp_encode_tc(data_batch_d, state_tc_d, num_samples, state_len, num_qubits, enable_zz, 0);
     cudaDeviceSynchronize();
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    auto end_tc = std::chrono::high_resolution_clock::now();
+    auto duration_tc = std::chrono::duration_cast<std::chrono::microseconds>(end_tc - start_tc).count();
 
     // 3. Verify Correctness
     std::vector<cuDoubleComplex> h_state_baseline(num_samples * state_len);
@@ -83,7 +88,12 @@ int main(int argc, char* argv[]) {
         if(err_i > max_err) max_err = err_i;
     }
 
-    std::cout << "Bench execution complete. Duration: " << duration << " us" << std::endl;
+    std::cout << "N=" << num_qubits << ", Batch=" << num_samples << std::endl;
+    std::cout << "Baseline Duration: " << duration_baseline << " us" << std::endl;
+    std::cout << "TC Path Duration:  " << duration_tc << " us" << std::endl;
+    if (duration_tc > 0) {
+        std::cout << "Speedup:           " << (double)duration_baseline / duration_tc << "x" << std::endl;
+    }
     std::cout << "Correctness Verification - Max Absolute Error: " << max_err << std::endl;
     
     if (max_err < 1e-6) {
