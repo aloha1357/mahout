@@ -24,18 +24,21 @@ METRIC_LABELS = {
 
 # PR007 kernel tags -> human title
 KERNEL_CASES = [
-    ("ncu_fwt_baseline.csv", "fwt_butterfly_batch_kernel", "Baseline FWT (14 butterfly stages, batch=1)"),
-    ("ncu_phase_split.csv", "iqp_phase_split_kernel", "TC: phase split"),
+    ("ncu_fwt_baseline.csv", "fwt_butterfly_batch_kernel", "Baseline FWT"),
+    ("ncu_simt_tc_fused.csv", "iqp_phase_fwt_normalize_tc_kernel", "SIMT TC fused (N<=12 path, T4 compat)"),
+    ("ncu_phase_split.csv", "iqp_phase_split_kernel", "TC: phase split (N>12)"),
     ("ncu_modulo_precompute.csv", "precompute_modulo_kernel_p26_implicit", "TC: modulo precompute"),
     ("ncu_ozaki_grid.csv", "implicit_hadamard_ozaki_grid_kernel_implicit", "Ozaki MMA grid (OZAKI_NCU_PROFILE=1)"),
-    ("ncu_ozaki_persistent.csv", "implicit_hadamard_ozaki_persistent_kernel_implicit", "Ozaki MMA persistent (production)"),
+    ("ncu_ozaki_persistent.csv", "implicit_hadamard_ozaki_persistent_kernel_implicit", "Ozaki MMA persistent"),
 ]
 
 
 def parse_csv(path: Path) -> tuple[dict[str, list[float]], str]:
     text = path.read_text(encoding="utf-8", errors="replace")
     status = "OK"
-    if "LaunchFailed" in text:
+    if text.strip().startswith("SKIP") or "SKIPPED" in text:
+        status = "SKIPPED (CC<8 SIMT mode)"
+    elif "LaunchFailed" in text:
         status = "LaunchFailed"
     if "(0, 0, 0)" in text and "Grid Size" in text:
         if status == "OK":

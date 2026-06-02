@@ -179,17 +179,11 @@ python3 scripts/generate_ncu_summary.py
 
 ---
 
-## 架構注意（Colab GPU）
+## 架構注意
 
-`scripts/detect_gpu_arch.sh` 會依 `nvidia-smi` 設 `-arch=sm_XX`（**與 GPU 一致**）：
-
-- T4 → `sm_75` → **Ozaki 編譯/執行不支援**（見上方表格）
-- A100 → `sm_80` → 建議 Colab 選項
-- L4 / RTX 40xx → `sm_89`
-
-`scripts/check_gpu_compat.sh` 會在 CC < 8.0 時 **提前失敗** 並提示改選 A100。
-
-**不要**在 T4 上強制 `-arch=sm_80`：即使編譯過，執行也會出現 *no kernel image* 或 MMA 錯誤。
+- `detect_gpu_arch.sh`：T4→`sm_75`，A100→`sm_80`，L4→`sm_89`
+- `check_gpu_compat.sh`：CC < 8 時 `T4_SIMT_MODE=1`，改用 `ImplicitHadamardOzaki_stub.cu`（與原版「大 N 才走 Ozaki」一致）
+- 不要在 T4 上強制 `-arch=sm_80` 跑 N=14（會 runtime 失敗）
 
 ---
 

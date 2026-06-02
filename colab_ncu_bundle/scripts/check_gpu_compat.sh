@@ -1,31 +1,38 @@
 #!/usr/bin/env bash
-# Exit 0 if GPU supports INT8 mma.m16n8k32 (CC >= 8.0). Else exit 1 and print guidance.
+# Prints shell snippet to eval: export T4_SIMT_MODE=0|1
 set -euo pipefail
 MIN_MAJOR="${MIN_CC_MAJOR:-8}"
+T4_SIMT_MODE=0
 
 cap=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d ' ')
+if [[ -n "${FORCE_T4_SIMT_MODE:-}" ]]; then
+  echo "FORCE_T4_SIMT_MODE — SIMT-compat build" >&2
+  echo "export T4_SIMT_MODE=1"
+  exit 0
+fi
+
 if [[ -z "${cap:-}" ]]; then
-  echo "WARN: cannot read compute_cap from nvidia-smi"
+  echo "WARN: cannot read compute_cap; full build" >&2
+  echo "export T4_SIMT_MODE=0"
   exit 0
 fi
 
 major=${cap%%.*}
 minor=${cap##*.}
 name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
-
-echo "GPU: ${name:-unknown} | compute capability ${major}.${minor} (sm_${major}${minor})"
+echo "GPU: ${name:-unknown} | CC ${major}.${minor} (sm_${major}${minor})" >&2
 
 if [[ "$major" -lt "$MIN_MAJOR" ]]; then
-  echo ""
-  echo "ERROR: This bundle uses inline Tensor Core MMA m16n8k32 (INT8 Ozaki kernels)."
-  echo "       Minimum compute capability: ${MIN_MAJOR}.0 (e.g. A100, L4, RTX 3060+)."
-  echo "       Your GPU is ${major}.${minor} (e.g. Colab T4) — not supported for full build."
-  echo ""
-  echo "Colab fix: Runtime -> Change runtime type -> Hardware accelerator -> GPU"
-  echo "           Choose A100 or L4 (Colab Pro / paid runtime may be required)."
-  echo ""
-  echo "Partial option on T4: run side-kernel NCU only:"
-  echo "  ./scripts/run_side_kernels_ncu.sh"
-  exit 1
+  T4_SIMT_MODE=1
+  echo "" >&2
+  echo "SIMT-compat mode (same as original repo: N<=12 uses SIMT, no Ozaki MMA)." >&2
+  echo "PR007 N=14/16 Ozaki path skipped on this GPU; use A100/L4 for full matrix." >&2
+  echo "Set PR007_STRICT_GPU=1 to abort instead of compat mode." >&2
+  echo "" >&2
+  if [[ "${PR007_STRICT_GPU:-0}" == "1" ]]; then
+    echo "ERROR: PR007_STRICT_GPU=1" >&2
+    exit 1
+  fi
 fi
-exit 0
+
+echo "export T4_SIMT_MODE=${T4_SIMT_MODE}"
