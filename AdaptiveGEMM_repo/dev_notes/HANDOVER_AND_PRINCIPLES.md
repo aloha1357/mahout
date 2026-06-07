@@ -1,44 +1,67 @@
 # IQP Encoding Optimization: Handover & Execution Principles
 
-This document serves as a centralized guide for the execution, testing, and documentation of the IQP Encoding Optimization PR Sequence. It outlines the project roadmap, the methodology for extracting code from the final research branch, and the strict standards for PR submission.
+This document is the **Comprehensive Handover Manual** for any developer or AI assistant continuing the work on the Apache Mahout `qdp` (Quantum Data Processing) module. 
 
-## 1. The Roadmap (6-PR Split Strategy)
-
-We are incrementally introducing a highly complex "Matrix-Free Implicit Hadamard Tensor Core Engine" to the Apache Mahout quantum computing module (`qdp`). To make this reviewable by the open-source community, we are splitting the final research state into 6 logical PRs:
-
-- **[PR 1] Phase kernel optimization (Done):** Removed warp divergence in `compute_phase` and moved `norm_factor` calculation to the host.
-- **[PR 2] Batch throughput optimization (Done):** Scaffolded `iqp_tc.cu`, implemented batch unrolling, real/imaginary splitting, and Shared-Memory Bank-Conflict-Free Transpose.
-- **[PR 3] Shared-memory FWT path (Next):** Implement the `iqp_phase_fwt_normalize_tc_kernel` for $N \le 12$ (or `FWT_SHARED_MEM_THRESHOLD`). Fuses phase computation, FWT, and normalization directly in Shared Memory to bypass DRAM bottlenecks.
-- **[PR 4] Kronecker decomposition based FWT:** Introduce the structural logic for Kronecker product FWT, bridging the gap between standard FWT and the Tensor Core implementation.
-- **[PR 5] Implicit Hadamard engine:** Implement the Matrix-Free `ImplicitHadamardOzakiEngine`. Eliminates the $O(4^N)$ dense matrix allocation, resolving OOM issues for $N \ge 14$.
-- **[PR 6] Tensor Core acceleration:** Hook up the Ozaki INT8 mixed-precision engine to dispatch the Kronecker matrix multiplications to hardware Tensor Cores.
+It defines the exact development methodology ("Git Archaeology"), the strict branching rules, documentation tracking protocols, and environment setup required to reconstruct the Tensor Core integrations for open-source PR submission.
 
 ---
 
-## 2. Execution Methodology (Git Archaeology)
+## 1. Project Overview & Roadmap (The 6-PR Split Strategy)
 
-We are essentially performing "Git Archaeology". The final, fully working code resides in the local history (specifically on the `pr-final-version` branch or previous commits).
+We are incrementally introducing a highly complex "Matrix-Free Implicit Hadamard Tensor Core Engine" to the Apache Mahout quantum computing module (`qdp`). To make this massive feature reviewable by the open-source community, we are splitting the final research state (found on the `pr-final-version` tag) into 6 logical PRs:
 
-**Strict Branching & Documentation Workflow:**
-1. **Internal Documentation Branch:** All PR drafts, checklists, and this handover manual MUST reside ONLY on the local `internal-dev-notes` branch. These `.md` files should NEVER be committed to the actual PR branches that are pushed to GitHub.
-2. **Sequential Branching:** Each PR must branch off the previous one to maintain a linear history. 
-   - Example: Checkout `pr2-batch-throughput-opt`, then `git checkout -b pr3-shared-memory-fwt`.
-3. **Extraction & Implementation:** Checkout the new PR branch. Use `git show` or `git diff` against `pr-final-version` to identify the specific lines of code. Surgically inject *only* the necessary logic.
-4. **Commenting:** Add inline English comments prefixed with `// PR[X]:` (e.g., `// PR3: Fuse Phase and FWT in Shared Memory`).
-5. **Drafting PR Description:** Before pushing, switch to `internal-dev-notes`, write the `PR0X_Feature.md`, commit it there, and switch back to the PR branch to push the code-only commits.
+- **[PR 1] Phase kernel optimization (Done ✅):** Removed warp divergence in `compute_phase` and moved `norm_factor` calculation to the host.
+- **[PR 2] Batch throughput optimization (Done ✅):** Scaffolded `iqp_tc.cu`, implemented batch unrolling, real/imaginary splitting, and Shared-Memory Bank-Conflict-Free Transpose.
+- **[PR 3] Shared-memory FWT path (Done ✅):** Implemented `iqp_phase_fwt_normalize_tc_kernel` for $N \le 12$. Fused phase computation, FWT, and normalization in Shared Memory.
+- **[PR 4] Kronecker decomposition based FWT (Done ✅):** Introduced structural logic for Kronecker product FWT, bridging the gap between standard FWT and Tensor Cores.
+- **[PR 5] Implicit Hadamard engine (Done ✅):** Implemented the Matrix-Free `ImplicitHadamardOzakiEngine`. Eliminates $O(4^N)$ dense matrix allocation for $N \ge 14$. Also removed the unsupported `sm_75` fallback in `build.rs` to allow INT8 `.m16n8k32` compilation.
+- **[PR 6] Tensor Core acceleration (Next ⏳):** Hook up the `AdaptiveOzakiEngine` for mixed-precision graded-ring Tensor Core operations on non-Hadamard logic, finalizing the full pipeline.
 
 ---
 
-## 3. Testing Principles
+## 2. Execution Methodology ("Git Archaeology")
 
-Due to the Windows environment lacking native CUDA compilation tools, all Rust/CUDA testing **must** be executed within the WSL environment.
+We are performing **"Git Archaeology"**. The final, fully working code already resides in our local repository (on the `pr-final-version` branch). The task is *not* to invent new code, but to carefully dissect the final version and transplant it step-by-step into clean, logical PRs.
+
+### 🛑 Strict Branching & Tracking Rules
+
+We use a strictly compartmentalized branching strategy. You must understand the roles of these branches:
+
+1. **`upstream/main` (The Clean Baseline):** The original Apache Mahout codebase. All PR chains start from here.
+2. **`prX-[feature-name]` (The Code-Only PR Branches):**
+   - **GOLDEN RULE:** **NO MARKDOWN (`.md`) FILES ALLOWED.** These branches must contain *only* C++/Rust/Build file changes.
+   - **Linear History:** PR branches must be strictly sequential. `pr2` branches from `pr1`. `pr3` branches from `pr2`, etc.
+   - If a documentation file accidentally gets tracked in a PR branch, you MUST use `git rm --cached`, `git commit --amend`, and potentially `git rebase --onto` to deep-clean the history before pushing.
+3. **`internal-dev-notes` (The Documentation Staging Branch):**
+   - All PR drafts (`PR01_...md` to `PR06_...md`), checklists, and this `HANDOVER_AND_PRINCIPLES.md` file MUST be tracked *only* here.
+   - We do not PR this branch. It's a synchronization hub.
+4. **Local `main` (The Ultimate Archive & Research Record):**
+   - We use the local `main` branch as a comprehensive archive.
+   - **Protocol:** Whenever documentation is updated on `internal-dev-notes`, it must be synced over to local `main` (e.g., `git checkout main && git checkout internal-dev-notes -- path/to/md && git commit`). 
+   - *Never* push local `main` to `upstream/main`.
+
+### Execution Workflow per PR:
+1. `git checkout pr[X-1]` -> `git checkout -b pr[X]`
+2. Use `git show pr-final-version:path/to/file` or `git diff` to extract specific lines.
+3. Implement surgically. Add inline English comments prefixed with `// PR[X]:`.
+4. Run tests (see Testing Protocol).
+5. Stage and commit code.
+6. `git checkout internal-dev-notes`, write `PR0X_[Name].md`, commit, and push `internal-dev-notes`.
+7. `git checkout main`, sync the new docs from `internal-dev-notes`, commit.
+8. `git checkout pr[X]` and `git push -f mahout_fork pr[X]`.
+
+---
+
+## 3. Testing Principles (WSL Mandate)
+
+Due to the Windows host lacking native `nvcc` compilation tools in the PATH, all Rust/CUDA testing **must** be executed within the WSL (Windows Subsystem for Linux) environment.
 
 **Mandatory Test Command:**
 ```bash
 wsl -e bash -ic 'export PATH=/usr/local/cuda/bin:$PATH && cd /mnt/d/D_backup/2025/tum/26S/apache_mout/qdp && cargo test --workspace --exclude qdp-python --lib'
 ```
-*   **Rule:** Code **must not** be force-pushed to the remote repository until this test command passes with 0 failures.
-*   **Rule:** CI/CD correctness is assumed; we do not need standalone correctness PRs. Feature PRs will be validated by the existing test suite.
+*   **Zero-Failure Tolerance:** Code **must not** be force-pushed to the remote PR branch until this test command passes with 0 failures.
+*   **Implicit Correctness:** CI/CD correctness is assumed by the repository maintainers; we do not submit standalone "Correctness" PRs. Feature PRs will be validated automatically by the CI test suite using the tests we run locally.
 
 ---
 
@@ -56,15 +79,15 @@ N/A
 ### Changes
 
 - [ ] Bug fix
-- [ ] New feature
-- [x] Refactoring
+- [x] New feature
+- [ ] Refactoring
 - [ ] Documentation
 - [ ] Test
 - [ ] CI/CD pipeline
 - [ ] Other
 
 ### Why
-[1-2 paragraphs explaining the performance bottleneck or architectural limitation being solved.]
+[Explain the performance bottleneck, mathematical rationale, or hardware limitation being solved (e.g., VRAM limit, warp divergence).]
 
 ### How
 [Bullet points mapping directly to the code changes. Explain the mechanism of the optimization.]
@@ -77,13 +100,12 @@ N/A
 
 ---
 
-## 5. Performance Profiling (Nsight Compute)
+## 5. Performance Profiling (Nsight Compute) 
 
-When reviewing the success of these optimizations later, follow the principles defined in `07_pr_sugestion.md`.
+*(Reference for Future Maintainers)*
 
-**Question-Driven Profiling:** Do not look at all metrics at once.
-1. **Is it Launch Overhead?** Check `sm__throughput`, `smsp__inst_executed_pipe_tensor.sum`, and total `GPU time`. If SM/Tensor utilization is low and runtime is flat (e.g., N=14 and N=16 take the same time), you are bound by kernel launch overhead.
+When reviewing the success of these optimizations later, follow the "Question-Driven Profiling" principles defined in our legacy notes (`07_pr_sugestion.md`):
+
+1. **Launch Overhead Bound?** Check `sm__throughput`, `smsp__inst_executed_pipe_tensor.sum`, and total `GPU time`. If SM utilization is low and runtime is flat across $N=14$ and $N=16$, you are bound by kernel launch.
 2. **Compute vs. Memory Bound?** Compare `dram__throughput` vs `l1tex__data_pipe_lsu_wavefronts_mem_shared.sum` vs `sm__throughput`.
-3. **Resource Saturation (Why N=28 fails):** Look at `launch__shared_mem_per_block`, `launch__registers_per_thread`, and local memory spills to prove resource exhaustion, not algorithmic bugs.
-
-Always test on target qubit counts: `N=14` (Small), `N=20` (Mid), `N=26` (Near Boundary), `N=28` (Failure state).
+3. **Resource Saturation (Why N=28 fails):** Look at `launch__shared_mem_per_block`, `launch__registers_per_thread`, and local memory spills to prove hardware exhaustion, not algorithmic flaws.
