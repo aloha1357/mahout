@@ -19,11 +19,13 @@ We are incrementally introducing a highly complex "Matrix-Free Implicit Hadamard
 
 We are essentially performing "Git Archaeology". The final, fully working code resides in the local history (specifically on the `pr-final-version` branch or previous commits).
 
-**Workflow per PR:**
-1. **Branching:** Create a new branch from the `main` (or the previous PR's branch if dependent). E.g., `git checkout -b pr3-shared-memory-fwt`.
-2. **Extraction:** Use `git show` or `git diff` against `pr-final-version` to identify the specific lines of code relevant to the current PR's scope.
-3. **Implementation:** Use `replace` or manual edits to surgically inject *only* the necessary logic. Avoid bringing in variables, headers, or parameters that belong to later PRs.
-4. **Commenting:** Add inline English comments prefixed with `// PR[X]:` (e.g., `// PR3: Fuse Phase and FWT in Shared Memory`) to explain *why* the optimization is done, aiding external code reviewers.
+**Strict Branching & Documentation Workflow:**
+1. **Internal Documentation Branch:** All PR drafts, checklists, and this handover manual MUST reside ONLY on the local `internal-dev-notes` branch. These `.md` files should NEVER be committed to the actual PR branches that are pushed to GitHub.
+2. **Sequential Branching:** Each PR must branch off the previous one to maintain a linear history. 
+   - Example: Checkout `pr2-batch-throughput-opt`, then `git checkout -b pr3-shared-memory-fwt`.
+3. **Extraction & Implementation:** Checkout the new PR branch. Use `git show` or `git diff` against `pr-final-version` to identify the specific lines of code. Surgically inject *only* the necessary logic.
+4. **Commenting:** Add inline English comments prefixed with `// PR[X]:` (e.g., `// PR3: Fuse Phase and FWT in Shared Memory`).
+5. **Drafting PR Description:** Before pushing, switch to `internal-dev-notes`, write the `PR0X_Feature.md`, commit it there, and switch back to the PR branch to push the code-only commits.
 
 ---
 
