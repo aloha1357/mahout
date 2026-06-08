@@ -64,6 +64,9 @@
 *   **目標：** 集大成者。實作動態分支：N <= 12 走 PR3 的共享記憶體融合路徑；N > 12 走 PR4 + PR5 的張量核心 Ozaki 路徑。
 *   **修復：** 解決了 `ImplicitHadamardOzaki.cu` 裡 `ldmatrix` 的 16-byte 對齊 (CUDA_ERROR_MISALIGNED_ADDRESS) 的嚴重崩潰問題。
 *   **結論：** 證實了「共享記憶體融合」極其成功；但「張量核心分解」的 Overhead 在目前實作下仍然太高，不敵高度優化過後的 PR1 Baseline。未來的維護者需針對記憶體配置與轉置進行深度改造，才能讓 N > 12 的 Tensor Core 路線產生實際加速。
+*   **PR6 待完成（與 upstream review 前一併做完）：**
+    1. **剝離 hot path `cudaMalloc`** — `iqp_tc.cu` 與 Ozaki GEMM 改用 buffer pool / workspace 重用（見 workflow §9）。
+    2. **E2E 驗證** — 在實驗用 `apache_mout`（本 fork）跑 `benchmark_e2e.py`；PR6 擴充 `--encoding-method iqp` / `iqp-z` 後量測 disk→GPU→forward 全鏈路（見 workflow §10）。`benchmark_latency.py` / `throughput` 現已支援 IQP，可先驗證 PR1–PR4 疊加效果。
 
 ---
 
@@ -90,3 +93,4 @@
 2.  **建議的正式合併策略：** 強烈建議先將 **PR1 (優化 Baseline)** 與 **PR3 (N<=12 共享記憶體加速)** 整合進正式版的 `main` 中，因為它們能提供穩定且無副作用的顯著加速。
 3.  **TC 路線的重構：** 關於 PR6 中 N > 12 的路徑，若要商用，必須將 `cudaMalloc` 從執行迴圈中剔除，並研究融合 (Fusion) 轉置步驟，否則其開銷永遠無法回本。
 4.  **PR 交接順序：** 完成 PR1 checklist 後再開 PR2；每個 PR 通過 pre-commit 與 benchmark 後才 push fork，準備好再開 upstream review。
+5.  **PR6 整合項：** 在 `pr6-tensor-core-acceleration` 完成 cudaMalloc 剝離（buffer pool）、擴充 `benchmark_e2e.py` 支援 IQP，並跑 E2E 驗證 PR1–PR4 疊加效果。詳見 [HANDOVER_QDP_PR_WORKFLOW.md](HANDOVER_QDP_PR_WORKFLOW.md) §9–§10。

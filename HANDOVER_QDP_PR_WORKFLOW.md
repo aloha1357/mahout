@@ -223,3 +223,133 @@ Copy into each PR description before requesting review:
 
 Do **not** run `pre-commit run --all-files` on a WSL mount of a Windows working copy;
 it can rewrite line endings across the entire tree.
+
+---
+
+## 9. PR6 work item: strip `cudaMalloc` from the hot path
+
+PR6 (`pr6-tensor-core-acceleration`) is the integration branch where **PR1–PR5 stack
+together**. One remaining blocker for N > 12 is synchronous device allocation on every
+encode. This should be **fixed inside PR6** before upstream review—not deferred to a
+later PR.
+
+### 9.1 What the handover means by「剝離 cudaMalloc」
+
+Not removing GPU memory outright, but **removing per-encode `cudaMalloc` / `cudaFree`
+from the latency-critical path**:
+
+| Location | Current behaviour | Impact |
+|----------|-------------------|--------|
+| `iqp_tc.cu` (`launch_iqp_encode_tc`, N > 12) | 6× `cudaMalloc` + 6× `cudaFree` per launch for real/imag temp buffers | Driver sync overhead every batch encode |
+| `ImplicitHadamardOzaki.cu` (`execute_implicit_hadamard`) | `cudaMalloc`/`cudaFree` for `dA8_h` (+ `d_queue`) **per GEMM call** | Called 4× per IQP encode (real/imag × 2 Kronecker steps) |
+| `AdaptiveOzaki.cu` | Same pattern in generic Ozaki GEMM paths | Inherited from `AdaptiveGEMM_repo` research code |
+
+`reports/PR006_Benchmark.md` already attributes N > 12 slowdown (0.33× vs baseline FWT)
+partly to this allocation overhead. There is **no** separate A/B benchmark yet that
+isolates「with vs without malloc」; the recommendation comes from micro-benchmark data +
+code review + comparison with the experimental Ozaki repo layout.
+
+### 9.2 Relation to `AdaptiveGEMM_repo` (experimental repo)
+
+| Artifact | Role |
+|----------|------|
+| `AdaptiveGEMM_repo/src/AdaptiveOzaki.cu` | Standalone Ozaki GEMM research; per-call `cudaMalloc` in demos/tests |
+| `colab_ncu_bundle/` | NCU profiling copy of QDP PR6 kernels (same malloc pattern) |
+| `qdp/qdp-kernels/` on `pr6-tensor-core-acceleration` | Production integration: Ozaki **plus** extra `iqp_tc.cu` buffers on top |
+
+PR6 did **not** add a malloc-free Ozaki variant; it ported the experimental engine and
+wrapped it in IQP TC dispatch. Stripping malloc in PR6 means:
+
+1. **Reuse buffers** via `qdp-core` `buffer_pool.rs` or a persistent `IqpTcWorkspace`
+   sized to max batch × max N used in benchmarks.
+2. **Hoist Ozaki workspace** (`dA8_h`, `d_queue`) into engine lifetime or a per-device
+   pool—mirror what production GEMM libraries do with workspace APIs.
+3. **Optional:** fuse transpose steps (PR4 follow-up) to reduce intermediate buffers.
+
+### 9.3 PR6 checklist extension (add to §6 before review)
+
+```markdown
+- [ ] N > 12 path uses pre-allocated / pooled buffers (no per-encode cudaMalloc in iqp_tc + Ozaki)
+- [ ] Re-run strict GPU baseline vs PR6 tip; update reports/PR006_Benchmark.md
+- [ ] N <= 12 fused path still passes (inherits PR3 shared-memory FWT)
+```
+
+### 9.4 What PR6 already inherits (PR1 → PR4)
+
+| PR | Capability in PR6 branch |
+|----|--------------------------|
+| PR1 | Branchless phase/IQP bit ops, host-side `norm_factor` in `phase.cu` / `iqp.cu` |
+| PR2 | Implicit real/imag split scaffolding, batch throughput hooks |
+| PR3 | `FWT_SHARED_MEM_THRESHOLD` fused kernel (N ≤ 12) in `iqp.cu` / `iqp_tc.cu` |
+| PR4 | Kronecker blocked TC-FWT + batch transpose (N > 12) in `iqp_tc.cu` |
+| PR5–6 | Adaptive Ozaki implicit Hadamard + hybrid dispatch |
+
+Kernel config: `FWT_SHARED_MEM_THRESHOLD = 12` in `kernel_config.h`—small N uses fused
+shared-memory path (PR3 win); large N uses decomposed TC path (needs §9 malloc fix).
+
+---
+
+## 10. End-to-end (E2E) validation on the experimental fork
+
+The experimental `apache_mout` fork (PR branches on `mahout_fork`) is the right place
+to run **realistic** benchmarks—not only micro-benchmarks like `benchmark_phase.py`.
+
+### 10.1 Which script is「E2E」?
+
+| Script | Scope | IQP support today |
+|--------|--------|-----------------|
+| **`benchmark_e2e.py`** | **Full cold-start pipeline:** Parquet/Arrow disk IO → normalize → encode → GPU VRAM → dummy forward pass | `amplitude`, `angle`, `basis` only |
+| `benchmark_latency.py` | CPU RAM → GPU encode (data-to-state) | `iqp`, `iqp-z`, amplitude, angle, basis |
+| `benchmark_throughput.py` | DataLoader-style vectors/sec | same as latency |
+| `encoding_benchmarks/qdp_pipeline/svhn_iqp.py` | Real ML-style IQP pipeline (SVHN) | `iqp` only, Mahout-only |
+
+**`benchmark_e2e.py` is the most realistic「training epoch cold start」** (see its module
+docstring). It already uses the repo-root unified venv layout (`make benchmark` /
+`qdp/qdp-python/benchmark/README.md`).
+
+For **IQP + PR1–PR6 stack**, use today:
+
+```bash
+# Data-to-state (IQP, exercises full PR6 dispatch)
+uv run --project qdp/qdp-python python qdp/qdp-python/benchmark/benchmark_latency.py \
+  --qubits 14 --batches 200 --batch-size 64 --frameworks mahout --encoding-method iqp
+
+# Throughput variant
+uv run --project qdp/qdp-python python qdp/qdp-python/benchmark/benchmark_throughput.py \
+  --qubits 12 --frameworks mahout --encoding-method iqp-z
+```
+
+Strict GPU vs base: checkout parent commit (or PR5 tip), rebuild, run; then PR6 tip,
+rebuild, run—same §5 methodology.
+
+### 10.2 PR6 E2E goal (recommended)
+
+PR6 should **extend `benchmark_e2e.py`** to accept `--encoding-method iqp` / `iqp-z`
+(reuse `benchmark/utils.py` generators already used by latency/throughput), then:
+
+1. Run E2E on `pr6-tensor-core-acceleration` after §9 malloc pooling.
+2. Compare against PR6 base **before malloc fix** and against PR3-only tip (optional).
+3. Record in `reports/PR006_Benchmark.md` or a new `reports/PR006_E2E.md`.
+
+This proves the integrated stack (PR1–PR4 + fixed PR6) under disk IO + encode + consume,
+not just kernel-only timing.
+
+### 10.3 Where to run
+
+| Step | Branch / location |
+|------|-------------------|
+| Build & test | `pr6-tensor-core-acceleration` on experimental fork |
+| Pre-commit | §3 (changed files only) |
+| Micro-benchmark | `benchmark_phase.py` (PR1), kernel-specific scripts per PR |
+| **E2E benchmark** | `benchmark_e2e.py` (+ IQP extension in PR6) |
+| Reports | `reports/PR00X_*.md` on `main` docs branch when promoting results |
+
+Do **not** treat `AdaptiveGEMM_repo` NCU profiles as E2E—they measure isolated Ozaki GEMM,
+not Mahout disk→train pipeline. Use them for kernel attribution only.
+
+### 10.4 Expected outcome after PR6 is complete
+
+- **N ≤ 12:** PR3 fused shared-memory path → should match or beat PR006 fused numbers
+  (~1.68× in `reports/PR006_Benchmark.md`).
+- **N > 12:** After malloc pooling, TC Kronecker path should close the gap vs baseline
+  FWT; re-measure—target is **≥ 1.0×** vs strict GPU baseline before claiming upstream merge.
