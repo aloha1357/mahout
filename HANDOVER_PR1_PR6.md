@@ -67,7 +67,26 @@
 
 ---
 
+## 標準開發流程（必讀）
+
+所有 PR1–PR6 分支在 push、交接、或 request review 之前，必須遵守同一份流程：
+
+**[HANDOVER_QDP_PR_WORKFLOW.md](HANDOVER_QDP_PR_WORKFLOW.md)**
+
+重點摘要：
+
+1. **CONTRIBUTING.md** — 測試、pre-commit、PR template、文件更新。
+2. **Pre-commit** — 變更檔案必須全數通過（含 `cargo clippy`）；通過後才 push 到 fork。
+3. **Unit tests** — 每個 PR 在 `testing/qdp/` 補強測試；PR2 繼承 PR1 的測試，PR3 繼承 PR2，依此類推。
+4. **Benchmark** — 嚴格 **GPU baseline vs GPU optimized**（`git checkout` 前一個 commit 量測），禁止用 Naive CPU / PyTorch 當主 baseline；結果寫入 `reports/PR00X_Benchmark.md`。
+5. **程式碼風格** — kernel 內禁止 `// PRn Optimization` 等 agent handover 註解；PR 說明寫在 PR description，不寫進 `.cu`。
+6. **分支繼承** — PR2 從 PR1 tip 開出，PR3 從 PR2 tip 開出，保留前序 PR 的乾淨實作與測試。
+
+---
+
 ## 接下來的維護建議
-1.  **確認各分支的報告已合併：** 所有的 Benchmark 報告 (PR001_Benchmark.md 到 PR006_Benchmark.md) 皆已存放於 `main` branch 的 `reports/` 之下。
+
+1.  **確認各分支的報告已合併：** 所有的 Benchmark 報告 (PR001_Benchmark.md 到 PR006_Benchmark.md) 皆已存放於 `main` branch 的 `reports/` 之下；新數據須依 [HANDOVER_QDP_PR_WORKFLOW.md](HANDOVER_QDP_PR_WORKFLOW.md) §5 以 GPU vs GPU 重新量測。
 2.  **建議的正式合併策略：** 強烈建議先將 **PR1 (優化 Baseline)** 與 **PR3 (N<=12 共享記憶體加速)** 整合進正式版的 `main` 中，因為它們能提供穩定且無副作用的顯著加速。
 3.  **TC 路線的重構：** 關於 PR6 中 N > 12 的路徑，若要商用，必須將 `cudaMalloc` 從執行迴圈中剔除，並研究融合 (Fusion) 轉置步驟，否則其開銷永遠無法回本。
+4.  **PR 交接順序：** 完成 PR1 checklist 後再開 PR2；每個 PR 通過 pre-commit 與 benchmark 後才 push fork，準備好再開 upstream review。
