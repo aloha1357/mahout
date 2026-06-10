@@ -25,10 +25,12 @@ For every Pull Request (PR2 to PR6), the following steps MUST be strictly adhere
 
 ## Specific PR Plans
 
-### PR2: Implicit FWT (Matrix-Free) Integration
+### PR2: Implicit FWT (Matrix-Free) Integration — DONE (2026-06-10)
 - **Goal:** Replace dense Hadamard matrix generation with standard SIMT implicit FWT.
-- **Unit Tests:** Add `testing/qdp/test_implicit_fwt.py` comparing the implicit matrix-free outputs against the original dense logic to ensure absolute numeric correctness.
-- **Cleanup:** Remove legacy dense matrix allocation and commented-out memory-heavy logic.
+- **Branch:** `pr2-implicit-fwt-rework` (from PR1 tip, pushed to `mahout_fork`).
+- **Unit Tests:** `testing/qdp/test_implicit_fwt.py` — 12/12 passed.
+- **Cleanup:** Removed naive `iqp_encode_kernel_naive` and small-N fallback dispatch in `iqp.cu`.
+- **Pending:** Benchmark record on `internal-dev-notes` (code push is complete).
 
 ### PR3: Shared Memory Model Optimization
 - **Goal:** Implement shared memory tiling and persistent cross-thread data exchanges to reduce DRAM bottlenecks.
