@@ -15,9 +15,9 @@ N/A
 
 ### Why
 
-For large qubit counts ($N > 12$), the standard Fast Walsh-Hadamard Transform (FWT) algorithm becomes severely bound by Global Memory bandwidth. The FWT requires $\log_2(N)$ stages of in-place memory access across the entire $2^N$ state vector, which causes cache thrashing and massive DRAM roundtrips. 
+For large qubit counts ($N > 12$), the standard Fast Walsh-Hadamard Transform (FWT) algorithm becomes severely bound by Global Memory bandwidth. The FWT requires $\log_2(N)$ stages of in-place memory access across the entire $2^N$ state vector, which causes cache thrashing and massive DRAM roundtrips.
 
-To overcome this, we mathematically restructure the FWT into a Kronecker Product Decomposition: $H_n = H_{n/2} \otimes H_{n/2}$. This transforms the sparse, memory-bound butterfly operations into standard, dense matrix multiplications (GEMM) using a Blocked architecture. 
+To overcome this, we mathematically restructure the FWT into a Kronecker Product Decomposition: $H_n = H_{n/2} \otimes H_{n/2}$. This transforms the sparse, memory-bound butterfly operations into standard, dense matrix multiplications (GEMM) using a Blocked architecture.
 
 While the implicit Hadamard engine is not yet introduced (coming in PR 5), this PR establishes the **structural memory layout, allocation, and transpose logic** necessary for the decomposition.
 

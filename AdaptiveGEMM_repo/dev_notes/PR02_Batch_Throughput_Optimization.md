@@ -36,3 +36,14 @@ To prepare for this `encode_batch_tc` pipeline, we need a robust scaffolding for
 
 - [x] Added or updated unit tests for all changes (Verified that existing tests pass, and batching logic doesn't break `qdp-core`)
 - [x] Added or updated documentation for all changes (Added explicit comments describing the purpose of the new kernels)
+
+## PR2 Benchmark Results (Batch Throughput)
+
+Benchmarking IQP Batch Throughput optimization for N=14.
+
+| Batch Size | Latency (us) | Throughput (states/sec) |
+|------------|--------------|-------------------------|
+| 32         |      1750.00 |                18285.68 |
+| 64         |      3358.86 |                19054.10 |
+| 128        |      7404.34 |                17287.17 |
+| 256        |     18787.20 |                13626.30 |

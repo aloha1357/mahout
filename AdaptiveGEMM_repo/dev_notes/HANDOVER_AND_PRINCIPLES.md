@@ -1,6 +1,6 @@
 # IQP Encoding Optimization: Handover & Execution Principles
 
-This document is the **Comprehensive Handover Manual** for any developer or AI assistant continuing the work on the Apache Mahout `qdp` (Quantum Data Processing) module. 
+This document is the **Comprehensive Handover Manual** for any developer or AI assistant continuing the work on the Apache Mahout `qdp` (Quantum Data Processing) module.
 
 It defines the exact development methodology ("Git Archaeology"), the strict branching rules, documentation tracking protocols, and environment setup required to reconstruct the Tensor Core integrations for open-source PR submission.
 
@@ -37,7 +37,7 @@ We use a strictly compartmentalized branching strategy. You must understand the 
    - We do not PR this branch. It's a synchronization hub.
 4. **Local `main` (The Ultimate Archive & Research Record):**
    - We use the local `main` branch as a comprehensive archive.
-   - **Protocol:** Whenever documentation is updated on `internal-dev-notes`, it must be synced over to local `main` (e.g., `git checkout main && git checkout internal-dev-notes -- path/to/md && git commit`). 
+   - **Protocol:** Whenever documentation is updated on `internal-dev-notes`, it must be synced over to local `main` (e.g., `git checkout main && git checkout internal-dev-notes -- path/to/md && git commit`).
    - *Never* push local `main` to `upstream/main`.
 
 ### Execution Workflow per PR:
@@ -100,7 +100,7 @@ N/A
 
 ---
 
-## 5. Performance Profiling (Nsight Compute) 
+## 5. Performance Profiling (Nsight Compute)
 
 *(Reference for Future Maintainers)*
 
