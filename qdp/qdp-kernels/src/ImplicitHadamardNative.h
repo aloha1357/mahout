@@ -57,6 +57,17 @@ public:
         cudaStream_t  stream = 0
     );
 
+    // PR9c: FP32 fused IQP path for QML (mirrors execute_iqp_fused_fp64).
+    void execute_iqp_fused_fp32(
+        const float* d_data_batch,
+        void*        d_state_batch,
+        size_t       num_samples,
+        unsigned int num_qubits,
+        unsigned int data_len,
+        int          enable_zz,
+        cudaStream_t stream = 0
+    );
+
 };
 
 } // namespace native

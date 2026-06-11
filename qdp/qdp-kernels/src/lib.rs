@@ -402,6 +402,17 @@ unsafe extern "C" {
         stream: *mut c_void,
     ) -> i32;
 
+    /// Launch IQP encoding using Native FWT with FP32 host/device data (PR9c)
+    pub fn launch_iqp_encode_native_f32(
+        data_batch_d: *const f32,
+        state_batch_d: *mut c_void,
+        num_samples: usize,
+        state_len: usize,
+        num_qubits: u32,
+        enable_zz: i32,
+        stream: *mut c_void,
+    ) -> i32;
+
     /// Launch phase encoding kernel
     /// Returns CUDA error code (0 = success)
     ///
@@ -761,6 +772,20 @@ pub extern "C" fn launch_iqp_encode_tc(
 #[unsafe(no_mangle)]
 pub extern "C" fn launch_iqp_encode_native(
     _data_batch_d: *const f64,
+    _state_batch_d: *mut c_void,
+    _num_samples: usize,
+    _state_len: usize,
+    _num_qubits: u32,
+    _enable_zz: i32,
+    _stream: *mut c_void,
+) -> i32 {
+    999
+}
+
+#[cfg(any(not(target_os = "linux"), qdp_no_cuda))]
+#[unsafe(no_mangle)]
+pub extern "C" fn launch_iqp_encode_native_f32(
+    _data_batch_d: *const f32,
     _state_batch_d: *mut c_void,
     _num_samples: usize,
     _state_len: usize,

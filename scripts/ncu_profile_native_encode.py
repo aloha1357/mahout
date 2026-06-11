@@ -2,13 +2,25 @@
 """Minimal encode_batch_native loop for NCU/Nsight profiling."""
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 import numpy as np
 import torch
 
-BENCH_DIR = Path(__file__).resolve().parents[1] / "qdp" / "qdp-python" / "benchmark"
+
+def _repo_root() -> Path:
+    env = os.environ.get("MAHOUT_ROOT")
+    if env:
+        return Path(env)
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "qdp" / "qdp-python" / "benchmark").is_dir():
+            return parent
+    raise SystemExit("Cannot locate repo root (set MAHOUT_ROOT)")
+
+
+BENCH_DIR = _repo_root() / "qdp" / "qdp-python" / "benchmark"
 sys.path.insert(0, str(BENCH_DIR))
 
 from utils import generate_batch_data  # noqa: E402

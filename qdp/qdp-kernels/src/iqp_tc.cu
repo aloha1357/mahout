@@ -45,6 +45,28 @@ __device__ double compute_phase_tc(
     return phase;
 }
 
+__device__ float compute_phase_tc_f32(
+    const float* __restrict__ data,
+    size_t x,
+    unsigned int num_qubits,
+    int enable_zz
+) {
+    float phase = 0.0f;
+    for (unsigned int i = 0; i < num_qubits; ++i) {
+        phase += data[i] * (float)((x >> i) & 1U);
+    }
+    if (enable_zz) {
+        unsigned int pair_idx = num_qubits;
+        for (unsigned int i = 0; i < num_qubits; ++i) {
+            for (unsigned int j = i + 1; j < num_qubits; ++j) {
+                phase += data[pair_idx] * (float)(((x >> i) & 1U) & ((x >> j) & 1U));
+                pair_idx++;
+            }
+        }
+    }
+    return phase;
+}
+
 // PR-C: 算子融合 (Operator Fusion) - 將 Phase 計算, FWT, Normalize 融合在 Shared Memory
 __global__ void iqp_phase_fwt_normalize_tc_kernel(
     const double* __restrict__ data_batch,
@@ -177,6 +199,71 @@ void iqp_tc_launch_transpose(const double* d_in, double* d_out, int B, int rows,
     iqp_tc_batch_transpose_kernel<<<grid, block, 0, stream>>>(d_in, d_out, B, rows, cols);
 }
 
+__global__ void iqp_phase_split_kernel_f32(
+    const float* __restrict__ data_batch,
+    float* __restrict__ state_real,
+    float* __restrict__ state_imag,
+    size_t num_samples,
+    size_t state_len,
+    unsigned int num_qubits,
+    unsigned int data_len,
+    int enable_zz
+) {
+    const size_t total_elements = num_samples * state_len;
+    const size_t stride = gridDim.x * blockDim.x;
+    const size_t state_mask = state_len - 1;
+
+    for (size_t global_idx = blockIdx.x * blockDim.x + threadIdx.x;
+         global_idx < total_elements;
+         global_idx += stride) {
+        const size_t sample_idx = global_idx >> num_qubits;
+        const size_t x = global_idx & state_mask;
+        const float* data = data_batch + sample_idx * data_len;
+
+        float phase = compute_phase_tc_f32(data, x, num_qubits, enable_zz);
+        float cos_phase, sin_phase;
+        sincosf(phase, &sin_phase, &cos_phase);
+
+        state_real[global_idx] = cos_phase;
+        state_imag[global_idx] = sin_phase;
+    }
+}
+
+__global__ void iqp_tc_batch_transpose_kernel_f32(
+    const float* __restrict__ in, float* __restrict__ out, int B, int rows, int cols
+) {
+    __shared__ float tile[TRANSPOSE_TILE_DIM][TRANSPOSE_TILE_DIM + 1];
+
+    int b = blockIdx.z;
+    int x = blockIdx.x * TRANSPOSE_TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TRANSPOSE_TILE_DIM + threadIdx.y;
+
+    for (int j = 0; j < TRANSPOSE_TILE_DIM; j += TRANSPOSE_BLOCK_ROWS) {
+        if (x < cols && (y + j) < rows) {
+            tile[threadIdx.y + j][threadIdx.x] = in[b * rows * cols + (y + j) * cols + x];
+        }
+    }
+    __syncthreads();
+
+    x = blockIdx.y * TRANSPOSE_TILE_DIM + threadIdx.x;
+    y = blockIdx.x * TRANSPOSE_TILE_DIM + threadIdx.y;
+
+    for (int j = 0; j < TRANSPOSE_TILE_DIM; j += TRANSPOSE_BLOCK_ROWS) {
+        if (x < rows && (y + j) < cols) {
+            out[b * rows * cols + (y + j) * rows + x] = tile[threadIdx.x][threadIdx.y + j];
+        }
+    }
+}
+
+static void iqp_tc_launch_transpose_f32(
+    const float* d_in, float* d_out, int B, int rows, int cols, cudaStream_t stream
+) {
+    dim3 block(TRANSPOSE_TILE_DIM, TRANSPOSE_BLOCK_ROWS, 1);
+    dim3 grid((cols + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM,
+              (rows + TRANSPOSE_TILE_DIM - 1) / TRANSPOSE_TILE_DIM, B);
+    iqp_tc_batch_transpose_kernel_f32<<<grid, block, 0, stream>>>(d_in, d_out, B, rows, cols);
+}
+
 // GEMM 結果重新組合回 cuDoubleComplex
 __global__ void recombine_complex_kernel(
     const double* __restrict__ real_part,
@@ -187,6 +274,18 @@ __global__ void recombine_complex_kernel(
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < total_elements) {
         out[idx] = make_cuDoubleComplex(real_part[idx], imag_part[idx]);
+    }
+}
+
+__global__ void recombine_complex_kernel_f32(
+    const float* __restrict__ real_part,
+    const float* __restrict__ imag_part,
+    cuFloatComplex* __restrict__ out,
+    size_t total_elements
+) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < total_elements) {
+        out[idx] = make_cuFloatComplex(real_part[idx], imag_part[idx]);
     }
 }
 
@@ -497,6 +596,219 @@ extern "C" int launch_iqp_encode_native(
     return iqp_native_run_kronecker_fp64(
         data_batch_d,
         static_cast<cuDoubleComplex*>(state_batch_d),
+        num_samples,
+        state_len,
+        num_qubits,
+        data_len,
+        enable_zz,
+        stream
+    );
+}
+
+static int iqp_native_run_small_fp32(
+    const float* data_batch_d,
+    cuFloatComplex* state_batch_d,
+    size_t num_samples,
+    size_t state_len,
+    unsigned int num_qubits,
+    unsigned int data_len,
+    int enable_zz,
+    cudaStream_t stream
+) {
+    size_t total_elements = num_samples * state_len;
+
+    static float *d_state_real = nullptr, *d_state_imag = nullptr;
+    static float *d_out_real = nullptr, *d_out_imag = nullptr;
+    static size_t allocated_elements = 0;
+
+    auto free_buffers = [&]() {
+        if (d_state_real) {
+            cudaFree(d_state_real); cudaFree(d_state_imag);
+            cudaFree(d_out_real);   cudaFree(d_out_imag);
+            d_state_real = nullptr;
+            allocated_elements = 0;
+        }
+    };
+
+    if (total_elements > allocated_elements) {
+        free_buffers();
+        cudaError_t err;
+        err = cudaMalloc(&d_state_real, total_elements * sizeof(float));
+        if (err != cudaSuccess) return (int)err;
+        err = cudaMalloc(&d_state_imag, total_elements * sizeof(float));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_out_real, total_elements * sizeof(float));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_out_imag, total_elements * sizeof(float));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        allocated_elements = total_elements;
+    }
+
+    const size_t blocks = (total_elements + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE;
+    iqp_phase_split_kernel_f32<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
+        data_batch_d, d_state_real, d_state_imag, num_samples, state_len, num_qubits, data_len, enable_zz
+    );
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) return (int)err;
+
+    qdp::native::ImplicitHadamardNativeEngine engine;
+    float norm_factor = 1.0f / (float)state_len;
+    engine.execute_implicit_hadamard_fp32(
+        d_state_real, d_out_real, num_samples, state_len, state_len, norm_factor, stream, false, 0
+    );
+    engine.execute_implicit_hadamard_fp32(
+        d_state_imag, d_out_imag, num_samples, state_len, state_len, norm_factor, stream, false, 0
+    );
+
+    recombine_complex_kernel_f32<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
+        d_out_real, d_out_imag, state_batch_d, total_elements
+    );
+    err = cudaGetLastError();
+    if (err != cudaSuccess) return (int)err;
+    err = cudaStreamSynchronize(stream);
+    return (int)err;
+}
+
+static int iqp_native_run_kronecker_fp32(
+    const float* data_batch_d,
+    cuFloatComplex* state_batch_d,
+    size_t num_samples,
+    size_t state_len,
+    unsigned int num_qubits,
+    unsigned int data_len,
+    int enable_zz,
+    cudaStream_t stream
+) {
+    size_t total_elements = num_samples * state_len;
+
+    int n1 = num_qubits / 2;
+    int n2 = num_qubits - n1;
+    int dim1 = 1 << n1;
+    int dim2 = 1 << n2;
+
+    static float *d_state_real = nullptr, *d_state_imag = nullptr;
+    static float *d_out_real = nullptr, *d_out_imag = nullptr;
+    static float *d_temp_real = nullptr, *d_temp_imag = nullptr;
+    static size_t allocated_elements = 0;
+
+    auto free_buffers = [&]() {
+        if (d_state_real) {
+            cudaFree(d_state_real); cudaFree(d_state_imag);
+            cudaFree(d_out_real);   cudaFree(d_out_imag);
+            cudaFree(d_temp_real);  cudaFree(d_temp_imag);
+            d_state_real = nullptr;
+            allocated_elements = 0;
+        }
+    };
+
+    if (total_elements > allocated_elements) {
+        free_buffers();
+        cudaError_t err;
+        err = cudaMalloc(&d_state_real, total_elements * sizeof(float));
+        if (err != cudaSuccess) return (int)err;
+        err = cudaMalloc(&d_state_imag, total_elements * sizeof(float));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_out_real, total_elements * sizeof(float));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_out_imag, total_elements * sizeof(float));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_temp_real, total_elements * sizeof(float));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_temp_imag, total_elements * sizeof(float));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        allocated_elements = total_elements;
+    }
+
+    const size_t buf_bytes = total_elements * sizeof(float);
+    cudaError_t err;
+    err = cudaMemsetAsync(d_temp_real, 0, buf_bytes, stream);
+    if (err != cudaSuccess) return (int)err;
+    err = cudaMemsetAsync(d_temp_imag, 0, buf_bytes, stream);
+    if (err != cudaSuccess) return (int)err;
+    err = cudaMemsetAsync(d_out_real, 0, buf_bytes, stream);
+    if (err != cudaSuccess) return (int)err;
+    err = cudaMemsetAsync(d_out_imag, 0, buf_bytes, stream);
+    if (err != cudaSuccess) return (int)err;
+
+    const size_t blocks = (total_elements + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE;
+    iqp_phase_split_kernel_f32<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
+        data_batch_d, d_state_real, d_state_imag, num_samples, state_len, num_qubits, data_len, enable_zz
+    );
+    err = cudaGetLastError();
+    if (err != cudaSuccess) return (int)err;
+
+    qdp::native::ImplicitHadamardNativeEngine engine;
+    float norm_factor = 1.0f / (float)state_len;
+
+    engine.execute_implicit_hadamard_fp32(
+        d_state_real, d_temp_real, num_samples * dim1, dim2, dim2, 1.0f, stream, false, 0
+    );
+    iqp_tc_launch_transpose_f32(d_temp_real, d_out_real, (int)num_samples, dim1, dim2, stream);
+    engine.execute_implicit_hadamard_fp32(
+        d_state_imag, d_temp_imag, num_samples * dim1, dim2, dim2, 1.0f, stream, false, 0
+    );
+    iqp_tc_launch_transpose_f32(d_temp_imag, d_out_imag, (int)num_samples, dim1, dim2, stream);
+
+    engine.execute_implicit_hadamard_fp32(
+        d_out_real, d_temp_real, num_samples * dim2, dim1, dim1, norm_factor, stream, false, 0
+    );
+    iqp_tc_launch_transpose_f32(d_temp_real, d_out_real, (int)num_samples, dim2, dim1, stream);
+    engine.execute_implicit_hadamard_fp32(
+        d_out_imag, d_temp_imag, num_samples * dim2, dim1, dim1, norm_factor, stream, false, 0
+    );
+    iqp_tc_launch_transpose_f32(d_temp_imag, d_out_imag, (int)num_samples, dim2, dim1, stream);
+
+    recombine_complex_kernel_f32<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
+        d_out_real, d_out_imag, state_batch_d, total_elements
+    );
+    err = cudaGetLastError();
+    if (err != cudaSuccess) return (int)err;
+    err = cudaStreamSynchronize(stream);
+    return (int)err;
+}
+
+extern "C" int launch_iqp_encode_native_f32(
+    const float* data_batch_d,
+    void*        state_batch_d,
+    size_t       num_samples,
+    size_t       state_len,
+    unsigned int num_qubits,
+    int          enable_zz,
+    cudaStream_t stream
+) {
+    unsigned int data_len = enable_zz
+        ? (unsigned int)(num_qubits + (unsigned int)num_qubits * (num_qubits - 1) / 2)
+        : num_qubits;
+
+    if (num_qubits <= 12) {
+        if (num_qubits >= 6) {
+            qdp::native::ImplicitHadamardNativeEngine engine;
+            engine.execute_iqp_fused_fp32(
+                data_batch_d,
+                state_batch_d,
+                num_samples,
+                num_qubits,
+                data_len,
+                enable_zz,
+                stream
+            );
+            return (int)cudaGetLastError();
+        }
+        return iqp_native_run_small_fp32(
+            data_batch_d,
+            static_cast<cuFloatComplex*>(state_batch_d),
+            num_samples,
+            state_len,
+            num_qubits,
+            data_len,
+            enable_zz,
+            stream
+        );
+    }
+
+    return iqp_native_run_kronecker_fp32(
+        data_batch_d,
+        static_cast<cuFloatComplex*>(state_batch_d),
         num_samples,
         state_len,
         num_qubits,

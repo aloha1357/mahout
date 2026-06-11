@@ -7,7 +7,10 @@ OUT="${ROOT}/qdp/qdp-kernels/reports/pr9_ncu"
 mkdir -p "${OUT}"
 source "${ROOT}/.venv_wsl/bin/activate"
 
-PROFILE_PY="${ROOT}/scripts/ncu_profile_native_encode.py"
+PROFILE_PY_SRC="${ROOT}/scripts/ncu_profile_native_encode.py"
+cp "${PROFILE_PY_SRC}" "${OUT}/ncu_profile_native_encode.py"
+PROFILE_PY="${OUT}/ncu_profile_native_encode.py"
+export MAHOUT_ROOT="${ROOT}"
 PR8_REF="${1:-840f016f8}"
 PR9_REF="${2:-HEAD}"
 
@@ -44,14 +47,14 @@ run_ncu() {
 profile_ref() {
   local ref="$1"
   local label="$2"
+  local wt="${OUT}/worktree_${label}"
   echo ""
   echo "############################################"
   echo "# Profiling ${label} @ ${ref}"
   echo "############################################"
-  cd "${ROOT}"
-  git stash push -u -m "ncu-compare-temp" >/dev/null 2>&1 || true
-  git checkout "${ref}"
-  cd "${ROOT}/qdp/qdp-python"
+  rm -rf "${wt}"
+  git worktree add --detach "${wt}" "${ref}" >/dev/null
+  cd "${wt}/qdp/qdp-python"
   maturin develop --release >/dev/null
   for N in 12 14 16; do
     run_nsys "${label}" "${N}"
@@ -61,11 +64,8 @@ profile_ref() {
 }
 
 cd "${ROOT}"
-CURRENT_BRANCH="$(git branch --show-current)"
 profile_ref "${PR8_REF}" "PR8"
 profile_ref "${PR9_REF}" "PR9"
-git checkout "${CURRENT_BRANCH}" 2>/dev/null || true
-git stash pop >/dev/null 2>&1 || true
 cd "${ROOT}/qdp/qdp-python" && maturin develop --release >/dev/null
 
 echo ""

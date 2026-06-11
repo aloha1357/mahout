@@ -253,6 +253,100 @@ impl IqpEncoder {
         Ok(batch_state_vector)
     }
 
+    /// Encode multiple IQP samples using Native FWT with FP32 input (PR9c QML path).
+    #[cfg(target_os = "linux")]
+    pub fn encode_batch_native_f32(
+        &self,
+        device: &Arc<CudaDevice>,
+        batch_data: &[f32],
+        num_samples: usize,
+        sample_size: usize,
+        num_qubits: usize,
+    ) -> Result<GpuStateVector> {
+        validate_qubit_count(num_qubits)?;
+        let expected_len = self.expected_data_len(num_qubits);
+
+        if sample_size != expected_len {
+            return Err(MahoutError::InvalidInput(format!(
+                "Batch sample size {} does not match required parameters {}",
+                sample_size, expected_len
+            )));
+        }
+
+        if batch_data.len() != num_samples * sample_size {
+            return Err(MahoutError::InvalidInput(format!(
+                "Batch data length {} does not match num_samples {} * sample_size {}",
+                batch_data.len(),
+                num_samples,
+                sample_size
+            )));
+        }
+
+        for (i, &val) in batch_data.iter().enumerate() {
+            if !val.is_finite() {
+                let sample_idx = i / sample_size;
+                let param_idx = i % sample_size;
+                return Err(MahoutError::InvalidInput(format!(
+                    "Sample {} parameter {} must be finite, got {}",
+                    sample_idx, param_idx, val
+                )));
+            }
+        }
+
+        let state_len = 1 << num_qubits;
+
+        let batch_state_vector = {
+            crate::profile_scope!("GPU::AllocBatchNativeF32");
+            GpuStateVector::new_batch(device, num_samples, num_qubits, Precision::Float32)?
+        };
+
+        let input_bytes = std::mem::size_of_val(batch_data);
+        let data_gpu = {
+            crate::profile_scope!("GPU::H2D_BatchIqpDataNativeF32");
+            device.htod_sync_copy(batch_data).map_err(|e| {
+                map_allocation_error(input_bytes, "IQP Native F32 batch upload", Some(num_qubits), e)
+            })?
+        };
+
+        let state_ptr = batch_state_vector.ptr_f32().ok_or_else(|| {
+            MahoutError::InvalidInput(
+                "Batch state vector precision mismatch (expected float32 buffer)".to_string(),
+            )
+        })?;
+
+        {
+            crate::profile_scope!("GPU::BatchKernelLaunchNativeF32");
+            let ret = unsafe {
+                qdp_kernels::launch_iqp_encode_native_f32(
+                    *data_gpu.device_ptr() as *const f32,
+                    state_ptr as *mut c_void,
+                    num_samples,
+                    state_len,
+                    num_qubits as u32,
+                    if self.enable_zz { 1 } else { 0 },
+                    (*device.cu_stream()) as *mut c_void,
+                )
+            };
+
+            if ret != 0 {
+                return Err(MahoutError::KernelLaunch(format!(
+                    "Batch IQP Native F32 encoding kernel failed: {} ({})",
+                    ret,
+                    cuda_error_to_string(ret)
+                )));
+            }
+        }
+
+        {
+            crate::profile_scope!("GPU::SynchronizeNativeF32");
+            device
+                .synchronize()
+                .map_err(|e| MahoutError::Cuda(format!("Sync failed: {:?}", e)))?;
+        }
+
+        Ok(batch_state_vector)
+    }
+
     #[cfg(not(target_os = "linux"))]
     pub fn encode_batch_tc(
         &self,
@@ -272,6 +366,20 @@ impl IqpEncoder {
         &self,
         _device: &Arc<CudaDevice>,
         _batch_data: &[f64],
+        _num_samples: usize,
+        _sample_size: usize,
+        _num_qubits: usize,
+    ) -> Result<GpuStateVector> {
+        Err(MahoutError::Cuda(
+            "CUDA unavailable (non-Linux stub)".to_string(),
+        ))
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub fn encode_batch_native_f32(
+        &self,
+        _device: &Arc<CudaDevice>,
+        _batch_data: &[f32],
         _num_samples: usize,
         _sample_size: usize,
         _num_qubits: usize,

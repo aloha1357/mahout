@@ -162,6 +162,7 @@ impl QdpEngine {
     }
 
     /// Encode a batch of IQP samples using the Native FWT path (no Ozaki quantization).
+    /// Accepts float64 (default) or float32 NumPy arrays (PR9c QML path).
     #[cfg(target_os = "linux")]
     #[pyo3(signature = (data, num_qubits, encoding_method = "iqp"))]
     fn encode_batch_native(
@@ -170,8 +171,33 @@ impl QdpEngine {
         num_qubits: usize,
         encoding_method: &str,
     ) -> PyResult<QuantumTensor> {
-        let array_2d = data.extract::<PyReadonlyArray2<f64>>().map_err(|_| {
-            PyRuntimeError::new_err("Failed to extract 2D NumPy array. Ensure dtype is float64.")
+        if let Ok(array_2d) = data.extract::<PyReadonlyArray2<f64>>() {
+            let shape = array_2d.shape();
+            let num_samples = shape[0];
+            let sample_size = shape[1];
+            let data_slice = array_2d.as_slice().map_err(|_| {
+                PyRuntimeError::new_err("NumPy array must be contiguous (C-order)")
+            })?;
+            let ptr = self
+                .engine
+                .encode_batch_native(
+                    data_slice,
+                    num_samples,
+                    sample_size,
+                    num_qubits,
+                    encoding_method,
+                )
+                .map_err(|e| PyRuntimeError::new_err(format!("Encoding failed: {}", e)))?;
+            return Ok(QuantumTensor {
+                ptr,
+                consumed: false,
+            });
+        }
+
+        let array_2d = data.extract::<PyReadonlyArray2<f32>>().map_err(|_| {
+            PyRuntimeError::new_err(
+                "Failed to extract 2D NumPy array. Ensure dtype is float64 or float32.",
+            )
         })?;
         let shape = array_2d.shape();
         let num_samples = shape[0];
@@ -181,7 +207,7 @@ impl QdpEngine {
             .map_err(|_| PyRuntimeError::new_err("NumPy array must be contiguous (C-order)"))?;
         let ptr = self
             .engine
-            .encode_batch_native(
+            .encode_batch_native_f32(
                 data_slice,
                 num_samples,
                 sample_size,
