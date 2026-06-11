@@ -21,7 +21,12 @@ for N in 12 14 16; do
 done
 
 echo ""
-echo "=== pytest (fast) ==="
+echo "=== fp32/fp64 encode GPU timing ==="
 cd "${ROOT}"
+python scripts/benchmark_iqp_native.py --label "${LABEL}"
+
+echo ""
+echo "=== pytest (fast) ==="
 pytest testing/qdp/test_iqp_native_path.py testing/qdp/test_iqp_tc_path.py \
-  testing/qdp/test_iqp_native_e2e.py -m "not slow" -q --tb=no 2>&1 | tail -3
+  testing/qdp/test_iqp_native_e2e.py testing/qdp/test_iqp_native_fp32.py \
+  -m "not slow" -q --tb=no 2>&1 | tail -5

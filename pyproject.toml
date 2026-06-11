@@ -91,6 +91,10 @@ markers = [
 exclude = [
     ".github/scripts/",
     "qdp/qdp-python/benchmark/",
+    "scripts/",
+    "qdp/qdp-kernels/reports/pr9_ncu/",
+    "testing/utils/",
+    "testing/qdp_python/",
 ]
 
 [tool.ty.analysis]
@@ -104,6 +108,20 @@ allowed-unresolved-imports = [
     "api.*",
     "qumat_qdp",
     "qumat_qdp.*",
+    "adaptive_gemm_py",
+    "IPython.display",
+    "google.colab",
+    "numpy",
+    "pytest",
+    "boto3",
+    "braket.aws",
+    "braket.circuits",
+    "braket.devices",
+    "cirq",
+    "qiskit",
+    "qiskit.*",
+    "qiskit_aer",
+    "utils",
 ]
 
 [tool.ruff]
