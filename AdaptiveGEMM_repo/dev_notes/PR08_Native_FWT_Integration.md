@@ -19,7 +19,7 @@ PR7 (`encode_batch_tc`) delivers correct, fast E2E IQP via Ozaki INT8 TC + fused
 1. **Alternative Hadamard engine on disk:** `ImplicitHadamardNative.cu` (Tri Dao–style register/SMEM butterfly, no Ozaki quantization) was prototyped but not wired into the Mahout pipeline or benchmarked against PR7.
 2. **Need evidence before changing default:** Reviewers and downstream QML users need an A/B path (`encode_batch_native` vs `encode_batch_tc`) with pytest + E2E numbers before PR9 lands a fused native kernel as default.
 
-PR8 answers: **Native FP64 FWT beats PR7 E2E by 3–11× at N=12–16 with verification PASS.**
+PR8 answers: **Native FP64 FWT beats PR7 E2E by 3.2–10.7× at N=12–16 with verification PASS.**
 
 ### How
 
@@ -50,22 +50,31 @@ PR8 answers: **Native FP64 FWT beats PR7 E2E by 3–11× at N=12–16 with verif
 
 - Added **`mahout-native`** framework and `run_mahout_arrow_native` for side-by-side E2E vs Arrow-FWT and Mahout-TC.
 
-#### `testing/qdp/test_iqp_native_path.py` (new)
+#### `testing/qdp/`
 
-- Normalization smoke (N=8,12), large-N smoke (N=14,16), FWT vs Native agreement (N=8–18).
+- **`test_iqp_native_path.py`** — API, normalization, FWT vs Native agreement (N=8–18), Kronecker smoke.
+- **`test_iqp_native_e2e.py`** — full Mahout pipeline (encode → DLPack → forward) vs FWT/TC.
 
-**Verified (WSL2, RTX 4060 Laptop, 2026-06-11, tip `d3bcf7d37`):**
+#### `scripts/`
+
+- `reproduce_pr8.sh` — one-shot build + unit + E2E pytest + N=12/14/16 benchmark.
+- `build_wsl.sh`, `test_native_wsl.sh`, `bench_native_wsl.sh` — helper scripts.
+
+**Verified (WSL2, RTX 4060 Laptop, 2026-06-11, tip `840f016f8`):**
 
 | Test | Result |
 |------|--------|
-| `pytest test_iqp_native_path.py` | **14/14 passed** |
+| `pytest test_iqp_native_path.py` | **29/29 passed** |
 | `pytest test_iqp_tc_path.py` (regression) | **12/12 passed** |
+| `pytest test_iqp_native_e2e.py -m "not slow"` | **6/6 passed** (2 slow optional) |
 | E2E `iqp-z`, N=12, 32 samples | Native **0.008 s** vs TC **0.086 s** (**10.7×**); vs FWT **1.44 s**; verify **PASS** |
 | E2E `iqp-z`, N=14, 32 samples | Native **0.020 s** vs TC **0.079 s** (**4.0×**); verify **PASS** |
 | E2E `iqp-z`, N=16, 32 samples | Native **0.020 s** vs TC **0.063 s** (**3.2×**); verify **PASS** |
 | Native vs TC amplitude @ N=16 | **1.94e-16** |
 
-Full tables: `reports/PR008_Benchmark.md` on `main`. PR9 plan: `PR09_Fused_Native_Plan.md`.
+Reproduce: `wsl bash scripts/reproduce_pr8.sh`
+
+Full tables: [`reports/PR008_Benchmark.md`](https://github.com/aloha1357/apache_mout/blob/main/reports/PR008_Benchmark.md) on `main`. PR9 plan: `PR09_Fused_Native_Plan.md`.
 
 ### What PR8 does NOT do (deferred to PR9)
 
@@ -76,9 +85,14 @@ Full tables: `reports/PR008_Benchmark.md` on `main`. PR9 plan: `PR09_Fused_Nativ
 
 ## Checklist
 
-- [x] Added or updated unit tests (`pytest testing/qdp/test_iqp_native_path.py` — 14 passed, WSL2 2026-06-11)
-- [x] Benchmark report on `apache_mout` `main` (`reports/PR008_Benchmark.md`)
+- [x] Added or updated unit tests (29 + 12 + 6 pytest, WSL2 2026-06-11)
+- [x] Benchmark report on `apache_mout` `main` (`reports/PR008_Benchmark.md`, tip `840f016f8`)
 - [x] PR body / handover on `internal-dev-notes`
 - [x] E2E A/B vs PR7 with correctness verification
-- [ ] pre-commit on changed `.cu` files (run before upstream PR)
-- [ ] No merge conflicts with PR7 stack tip
+- [x] pre-commit on changed files (`SKIP=ty`; ruff, license, clippy pass in WSL)
+- [x] No merge conflicts with PR6/PR7 stack (`git merge-tree` clean)
+
+## Stack
+
+**Base:** `mahout_fork/pr7-iqp-tc-ncu-profiling` (`ac7883296`)  
+**Head:** `mahout_fork/pr8-native-hadamard-benchmark` (`840f016f8`)

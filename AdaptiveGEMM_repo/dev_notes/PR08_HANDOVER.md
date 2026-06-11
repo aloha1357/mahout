@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-11  
 **Code branch:** `pr8-native-hadamard-benchmark` (base: PR7 `ac7883296`)  
-**Tip commit:** `d3bcf7d37`  
+**Tip commit:** `840f016f8`  
 **Environment:** WSL2 Ubuntu, RTX 4060 Laptop, `.venv_wsl`
 
 ---
@@ -14,8 +14,10 @@
 | Native wired + builds | ✅ |
 | Kronecker N>12 correctness | ✅ (4-step + transpose) |
 | FP64 N=7 thread dispatch fix | ✅ |
-| Unit tests | ✅ `test_iqp_native_path.py` **14/14** |
+| Unit tests | ✅ `test_iqp_native_path.py` **29/29** |
+| E2E pytest | ✅ `test_iqp_native_e2e.py` **6/6** (`-m "not slow"`) |
 | PR7 regression | ✅ `test_iqp_tc_path.py` **12/12** |
+| pre-commit | ✅ ruff, license, clippy (`SKIP=ty`) |
 | E2E vs PR7 | ✅ **3.2–10.7×** faster @ N=12,14,16 |
 | Benchmark report | ✅ `main` → `reports/PR008_Benchmark.md` |
 | PR9 justified | ✅ proceed to fused kernel |
@@ -46,7 +48,7 @@ Verification: Native vs FWT and Native vs TC **PASS** at all three N.
 
 ## Reproduce (one command)
 
-**Branch:** `pr8-native-hadamard-benchmark` tip `1a9d58b49`
+**Branch:** `pr8-native-hadamard-benchmark` tip `840f016f8`
 
 ```bash
 wsl bash scripts/reproduce_pr8.sh

@@ -1,7 +1,7 @@
 # PR9 Plan — Fused Native IQP Kernel
 
 **Date:** 2026-06-11  
-**Baseline:** PR8 `pr8-native-hadamard-benchmark` tip `d3bcf7d37`  
+**Baseline:** PR8 `pr8-native-hadamard-benchmark` tip `840f016f8`  
 **Decision:** PR8 E2E benchmarks **justify PR9** — Native already 3.2–10.7× faster than PR7 with verify PASS.
 
 ---
