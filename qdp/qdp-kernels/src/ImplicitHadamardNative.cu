@@ -993,18 +993,20 @@ template<int N, int THREADS>
 __global__ void __launch_bounds__(THREADS) native_fp64_extreme_fwt_kernel(
     const double* __restrict__ in_state,
     double* __restrict__ out_state,
-    double norm_factor
+    double norm_factor,
+    int fused_transpose,
+    size_t k_cols,
+    size_t batch_rows
 ) {
     size_t chunk_idx = blockIdx.x;
     int tid = threadIdx.x;
     constexpr int CHUNK_LEN = 1 << N;
     constexpr int NUM_B = CHUNK_LEN / THREADS;
 
-    // Each block processes one CHUNK_LEN size array
     const double* in_chunk = in_state + chunk_idx * CHUNK_LEN;
     double* out_chunk = out_state + chunk_idx * CHUNK_LEN;
 
-    double reg[64]; // Max 64
+    double reg[64];
 
     #pragma unroll
     for (int b = 0; b < NUM_B; ++b) {
@@ -1016,8 +1018,73 @@ __global__ void __launch_bounds__(THREADS) native_fp64_extreme_fwt_kernel(
 
     #pragma unroll
     for (int b = 0; b < NUM_B; ++b) {
-        if (norm_factor != 1.0) reg[b] *= norm_factor;
-        out_chunk[b * THREADS + tid] = reg[b];
+        double val = reg[b];
+        if (norm_factor != 1.0) val *= norm_factor;
+        if (fused_transpose && batch_rows > 0) {
+            int r = (int)chunk_idx;
+            int c = b * THREADS + tid;
+            int batch_idx = r / (int)batch_rows;
+            int r_in_batch = r % (int)batch_rows;
+            out_state[(size_t)batch_idx * (k_cols * batch_rows)
+                      + (size_t)c * batch_rows + (size_t)r_in_batch] = val;
+        } else {
+            out_chunk[b * THREADS + tid] = val;
+        }
+    }
+}
+
+static void launch_native_fp64_extreme_fwt(
+    int num_qubits,
+    size_t grid_m,
+    const double* d_A,
+    double* d_C,
+    double norm_factor,
+    cudaStream_t stream,
+    bool fused_transpose,
+    size_t k_cols,
+    size_t batch_rows
+) {
+    const int ftrans = fused_transpose ? 1 : 0;
+    const int smem_size = 16 * 256 * static_cast<int>(sizeof(double));
+    switch (num_qubits) {
+        case 6:
+            native_fp64_extreme_fwt_kernel<6, 64><<<grid_m, 64, 16 * 64 * (int)sizeof(double), stream>>>(
+                d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+            break;
+        case 7:
+            native_fp64_extreme_fwt_kernel<7, 128><<<grid_m, 128, 16 * 128 * (int)sizeof(double), stream>>>(
+                d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+            break;
+        case 8:
+            native_fp64_extreme_fwt_kernel<8, 256><<<grid_m, 256, smem_size, stream>>>(
+                d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+            break;
+        case 9:
+            native_fp64_extreme_fwt_kernel<9, 256><<<grid_m, 256, smem_size, stream>>>(
+                d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+            break;
+        case 10:
+            native_fp64_extreme_fwt_kernel<10, 256><<<grid_m, 256, smem_size, stream>>>(
+                d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+            break;
+        case 11:
+            native_fp64_extreme_fwt_kernel<11, 256><<<grid_m, 256, smem_size, stream>>>(
+                d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+            break;
+        case 12:
+            native_fp64_extreme_fwt_kernel<12, 256><<<grid_m, 256, smem_size, stream>>>(
+                d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+            break;
+        case 13:
+            native_fp64_extreme_fwt_kernel<13, 256><<<grid_m, 256, smem_size, stream>>>(
+                d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+            break;
+        case 14:
+            native_fp64_extreme_fwt_kernel<14, 256><<<grid_m, 256, smem_size, stream>>>(
+                d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+            break;
+        default:
+            break;
     }
 }
 
@@ -1204,20 +1271,14 @@ void ImplicitHadamardNativeEngine::execute_implicit_hadamard_fp64(
     int num_qubits = 0;
     while ((1ULL << num_qubits) < state_len) num_qubits++;
 
-    // TIER 1: Fast Path for N <= 14
+    // TIER 1: Fast Path for N <= 14 (optional fused-transpose epilogue for Kronecker)
     if (num_qubits <= 14 && num_qubits >= 6) {
-        int smem_size = 16 * 256 * sizeof(double); // 32 KB Max
-        switch (num_qubits) {
-            case 6: native_fp64_extreme_fwt_kernel<6, 64><<<m, 64, 16 * 64 * (int)sizeof(double), stream>>>(d_A, d_C, norm_factor); return;
-            case 7: native_fp64_extreme_fwt_kernel<7, 128><<<m, 128, 16 * 128 * (int)sizeof(double), stream>>>(d_A, d_C, norm_factor); return;
-            case 8: native_fp64_extreme_fwt_kernel<8, 256><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 9: native_fp64_extreme_fwt_kernel<9, 256><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 10: native_fp64_extreme_fwt_kernel<10, 256><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 11: native_fp64_extreme_fwt_kernel<11, 256><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 12: native_fp64_extreme_fwt_kernel<12, 256><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 13: native_fp64_extreme_fwt_kernel<13, 256><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 14: native_fp64_extreme_fwt_kernel<14, 256><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-        }
+        const bool fused_transpose = transpose_batch && batch_rows > 0;
+        launch_native_fp64_extreme_fwt(
+            num_qubits, m, d_A, d_C, norm_factor, stream,
+            fused_transpose, k, batch_rows
+        );
+        return;
     }
 
     int remaining_qubits = num_qubits;
@@ -1233,19 +1294,10 @@ void ImplicitHadamardNativeEngine::execute_implicit_hadamard_fp64(
             int chunk_size = 1 << qubits_this_pass;
             int num_chunks = m * (state_len / chunk_size);
             double pass_norm = (remaining_qubits == qubits_this_pass) ? norm_factor : 1.0;
-            int smem_size = 16 * 256 * sizeof(double); // 32 KB Max
 
-            switch (qubits_this_pass) {
-                case 6: native_fp64_extreme_fwt_kernel<6, 64><<<num_chunks, 64, 16 * 64 * (int)sizeof(double), stream>>>(d_A, d_C, pass_norm); break;
-                case 7: native_fp64_extreme_fwt_kernel<7, 128><<<num_chunks, 128, 16 * 128 * (int)sizeof(double), stream>>>(d_A, d_C, pass_norm); break;
-                case 8: native_fp64_extreme_fwt_kernel<8, 256><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 9: native_fp64_extreme_fwt_kernel<9, 256><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 10: native_fp64_extreme_fwt_kernel<10, 256><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 11: native_fp64_extreme_fwt_kernel<11, 256><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 12: native_fp64_extreme_fwt_kernel<12, 256><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 13: native_fp64_extreme_fwt_kernel<13, 256><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 14: native_fp64_extreme_fwt_kernel<14, 256><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-            }
+            launch_native_fp64_extreme_fwt(
+                qubits_this_pass, num_chunks, d_A, d_C, pass_norm, stream, false, 0, 0
+            );
         } else {
             int stride = 1 << current_qubit_offset;
             int chunk_size = 1 << qubits_this_pass;
