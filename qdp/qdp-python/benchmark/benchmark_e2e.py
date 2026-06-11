@@ -40,7 +40,7 @@ import pyarrow.ipc as ipc
 import pyarrow.parquet as pq
 import torch
 import torch.nn as nn
-from _qdp import QdpEngine
+from qumat_qdp import QdpEngine
 from utils import generate_batch_data, normalize_batch
 
 # Competitors
@@ -602,7 +602,10 @@ if __name__ == "__main__":
         type=str,
         default="amplitude",
         choices=["amplitude", "angle", "basis", "iqp", "iqp-z"],
-        help="Encoding method (iqp/iqp-z: Mahout-only; mahout-tc = PR7 TC path).",
+        help=(
+            "Encoding method (iqp/iqp-z: Mahout-only; "
+            "mahout-tc = PR7 TC, mahout-native = PR8 Native FWT)."
+        ),
     )
     args = parser.parse_args()
 

@@ -4,4 +4,5 @@ export PATH="/home/aloha/.cargo/bin:/usr/local/cuda/bin:${PATH}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "${ROOT}/.venv_wsl/bin/activate"
 cd "${ROOT}"
-pytest testing/qdp/test_iqp_native_path.py -v --tb=short
+pytest testing/qdp/test_iqp_native_path.py testing/qdp/test_iqp_tc_path.py -v --tb=short
+pytest testing/qdp/test_iqp_native_e2e.py -v --tb=short -m "not slow"
