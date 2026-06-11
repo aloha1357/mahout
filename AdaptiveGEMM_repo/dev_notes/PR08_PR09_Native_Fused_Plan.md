@@ -1,8 +1,23 @@
 # PR8 / PR9 Plan — Native Hadamard vs PR7 Ozaki-TC
 
-**Date:** 2026-06-11  
-**Baseline:** PR7 `pr7-iqp-tc-ncu-profiling` tip `ac7883296` (pushed to `mahout_fork`)  
-**Prototype (local, not on PR7):** `qdp/qdp-kernels/src/ImplicitHadamardNative.cu/.h`
+**Date:** 2026-06-11 (updated after PR8 benchmark)  
+**PR7 baseline:** `ac7883296`  
+**PR8 tip:** `d3bcf7d37` on `pr8-native-hadamard-benchmark` (pushed to `mahout_fork`)  
+**PR9 plan:** see `PR09_Fused_Native_Plan.md`
+
+---
+
+## PR8 result — GO for PR9
+
+| N | PR8 Native E2E | PR7 TC | Native/TC | Verify |
+|---|----------------|--------|-----------|--------|
+| 12 | 0.008 s | 0.086 s | **10.7×** | PASS |
+| 14 | 0.020 s | 0.079 s | **4.0×** | PASS |
+| 16 | 0.020 s | 0.063 s | **3.2×** | PASS |
+
+- `pytest test_iqp_native_path.py`: **14/14**
+- Report: `reports/PR008_Benchmark.md` on `main`
+- PR8 exceeds §8.5 success gate (≥1.1× E2E vs PR7)
 
 ---
 
@@ -192,11 +207,12 @@ PR6 (mahout_fork/pr6-tensor-core-acceleration)
 
 ## Immediate next steps (execution order)
 
-1. **Open / refresh upstream PR7** against `mahout_fork/pr6-tensor-core-acceleration`; link `PR07_E2E_TC_Integration.md`.
-2. **Cut `pr8-native-hadamard-benchmark`** from PR7 tip; `git stash pop` Native files.
-3. **build.rs + smoke** — confirm nvcc compiles ~1100 lines Native.cu on WSL2.
-4. **Run A/B** — E2E first @ N=12,14,16; fill success table in §8.5.
-5. **Decision meeting (async):** go PR9 fusion vs keep PR7-only stack.
+1. ~~PR8 wire + benchmark~~ **DONE** (`d3bcf7d37`)
+2. **Open upstream PR8** against PR7; body: `PR08_Native_FWT_Integration.md`
+3. **Cut `pr9-native-fused-iqp`** from PR8 tip — see `PR09_Fused_Native_Plan.md`
+4. **PR9a:** fused `iqp_native_phase_fwt_normalize_fp64_kernel` for N≤15
+5. **PR9b:** native `execute_implicit_hadamard_fp64_fused_transpose` (2-step Kronecker)
+6. **PR9c:** optional FP32 + default API switch
 
 ---
 
