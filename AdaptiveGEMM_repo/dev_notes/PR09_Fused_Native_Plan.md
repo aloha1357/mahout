@@ -183,8 +183,8 @@ PR7 pr7-iqp-tc-ncu-profiling
 
 | Sub-PR | Status | Tip |
 |--------|--------|-----|
-| PR9a — fused N≤12 fp64 (extreme FWT) | **Done** | `ac3d6f13d` on `pr9-native-fused-iqp` |
-| PR9b — 2-step Kronecker fused-transpose | Pending | — |
+| PR9a — fused N≤12 fp64 (extreme FWT) | **Done** | `ac3d6f13d` |
+| PR9b — 2-step Kronecker fused-transpose | **Done** | `29a84d0d7` on `pr9-native-fused-iqp` |
 | PR9c — FP32 + default switch | Pending | — |
 
 PR9a: `iqp_native_phase_fwt_normalize_fp64_kernel` in `iqp_tc.cu`; `launch_iqp_encode_native` N≤12 uses single kernel (no phase_split / recombine). **47/47** pytest pass (`-m "not slow"`).
@@ -195,8 +195,8 @@ PR9a: `iqp_native_phase_fwt_normalize_fp64_kernel` in `iqp_tc.cu`; `launch_iqp_e
 2. ~~Cut `pr9-native-fused-iqp` from PR8 tip~~ ✅
 3. ~~Implement 9.1 fused fp64 @ N≤12~~ ✅
 4. **NCU / E2E benchmark** PR8 vs PR9a encode-only @ N=12,16 → `reports/PR009_Benchmark.md` on `main`.
-5. Implement **9.2** `execute_implicit_hadamard_fp64_fused_transpose` + 2-step Kronecker.
-6. PR9b smoke: N=14,16,17,18 agreement vs FWT; re-run `bench_native_wsl.sh`.
+5. ~~Implement 9.2 fused-transpose + 2-step Kronecker~~ ✅ (`29a84d0d7`)
+6. **NCU + E2E benchmark** PR8 vs PR9 @ N=12,14,16 → optimize scatter epilogue if needed → `reports/PR009_Benchmark.md`.
 
 ---
 
