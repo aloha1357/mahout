@@ -50,22 +50,24 @@ N>12: phase_split                   N>12: phase_split (or fused phase in pass-0)
 
 ## PR9 work packages
 
-### 9.1 Fused N≤15 kernel (`iqp_native_fused.cu` or extend `iqp_tc.cu`)
+### 9.1 Fused N≤12 kernel (extend `ImplicitHadamardNative.cu`)
+
+**Important:** PR9 fuses **PR8's fastest kernel** (`native_fp64_extreme_fwt_kernel`), **not** the PR7 TC naive SMEM butterfly (`iqp_phase_fwt_normalize_tc_kernel`).
 
 **New kernels:**
 
 ```cuda
-iqp_native_phase_fwt_normalize_fp64_kernel  // production default
-iqp_native_phase_fwt_normalize_fp32_kernel  // QML opt-in (PR9b)
+native_fp64_extreme_iqp_fused_kernel<N, THREADS>  // Phase + extreme FWT + norm
+native_fp64_extreme_fwt_transform<THREADS>()      // shared __device__ helper
 ```
 
-**Design (mirror `iqp_phase_fwt_normalize_tc_kernel`):**
+**Design:**
 
-- Per-sample block: `blockIdx.x = sample_idx`
-- Phase: `compute_phase_tc` → write cos/sin into SMEM (or registers for small N)
-- FWT: reuse `native_fp64_extreme_fwt_kernel` logic inlined, or call as `__device__` stages
-- Norm: multiply by `1/state_len`, write `cuDoubleComplex` to global state
-- Dynamic SMEM: up to 64 KiB @ N=14 (4096 complex = 32 KiB real work — tune like PR7)
+- Per-sample block: `blockIdx.x = sample_idx` (same grid as extreme FWT)
+- Phase: `compute_phase_iqp` → cos/sin into `reg_real` / `reg_imag`
+- FWT: `native_fp64_extreme_fwt_transform` on real, then imag (warp-shuffle + SMEM, same as PR8)
+- Norm: `1/state_len`, write `cuDoubleComplex` once (no phase_split / recombine)
+- Dispatch: N=6..12, same thread/SMEM table as `execute_implicit_hadamard_fp64` tier-1
 
 **Dispatch:**
 
@@ -181,7 +183,7 @@ PR7 pr7-iqp-tc-ncu-profiling
 
 | Sub-PR | Status | Tip |
 |--------|--------|-----|
-| PR9a — fused N≤12 fp64 | **Done** | `1cee0d46f` on `pr9-native-fused-iqp` |
+| PR9a — fused N≤12 fp64 (extreme FWT) | **Done** | `ac3d6f13d` on `pr9-native-fused-iqp` |
 | PR9b — 2-step Kronecker fused-transpose | Pending | — |
 | PR9c — FP32 + default switch | Pending | — |
 
