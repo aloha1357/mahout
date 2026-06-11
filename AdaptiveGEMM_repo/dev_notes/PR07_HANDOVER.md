@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-11  
 **Code branch:** `pr7-iqp-tc-ncu-profiling` (base: PR6 `543586ac1`)  
-**Tip commit:** `1e7459a6e` ??Kronecker transpose + E2E verify fix  
+**Tip commit:** `ac7883296` — dev benchmark cleanup atop `1e7459a6e`
 **Environment:** WSL2 Ubuntu, RTX 4060 Laptop, `.venv_wsl`
 
 ---
@@ -70,7 +70,7 @@ pytest testing/qdp/test_iqp_tc_path.py -v   # 12 passed
 | 14 | ~0.05 s | ~1.1 s | ~22? | PASS ~1.5e-8 |
 | 16 | **0.057 s** | **0.827 s** | **~14.5?** | **PASS ~1.5e-8** |
 
-### (removed from code branches �X use `pytest` + optional local profiling)
+### (removed from code branches �X use `pytest` + optional local profiling)
 
 N=16: FWT ~10 ms, TC ~32 ms (encode-only TC slower; **E2E is the metric**).
 
@@ -90,7 +90,7 @@ python qdp/qdp-python/benchmark/benchmark_e2e.py --qubits 14 16 --samples 32 --e
 
 ## PR stack / remotes
 
-- **Fork PR branch:** `mahout_fork/pr7-iqp-tc-ncu-profiling` ??push after `1e7459a6e`
+- **Fork PR branch:** `mahout_fork/pr7-iqp-tc-ncu-profiling` — **pushed** (`ac7883296`, 2026-06-11)
 - **Docs:** `internal-dev-notes` (this file + `PR07_E2E_TC_Integration.md`)
 - **Benchmark report:** `origin/main` ??`reports/PR007_Benchmark.md`
 - **Upstream base:** `mahout_fork/pr6-tensor-core-acceleration`
@@ -99,10 +99,11 @@ python qdp/qdp-python/benchmark/benchmark_e2e.py --qubits 14 16 --samples 32 --e
 
 ## Known limitations / next work
 
-1. **n??56 fused TC:** fix WDDM non-determinism before re-enabling (optional perf win)
+1. **n=256 fused TC:** fix WDDM non-determinism before re-enabling (optional perf win)
 2. **Encode-only N>12:** still memory-bound vs FWT; acceptable for PR7 scope
-3. **Upstream PR:** open `aloha1357/mahout` ??`apache/mahout` when ready
+3. **Upstream PR:** open `aloha1357/mahout` → `apache/mahout` when ready (PR body: `PR07_E2E_TC_Integration.md`)
 4. **NCU / profiling artifacts:** stay on `main` / `internal-dev-notes` only, not code PR
+5. **PR8 / PR9:** see `PR08_PR09_Native_Fused_Plan.md` — wire `ImplicitHadamardNative.cu`, A/B vs PR7, then optional fused native kernel
 
 ---
 
