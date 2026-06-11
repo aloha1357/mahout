@@ -106,65 +106,6 @@ __global__ void iqp_phase_fwt_normalize_tc_kernel(
     }
 }
 
-// PR9: Fused Phase + SMEM FWT + Normalize for the Native IQP path (N <= 12).
-// Eliminates phase_split / real-imag buffers / recombine vs PR8 multi-kernel path.
-__global__ void iqp_native_phase_fwt_normalize_fp64_kernel(
-    const double* __restrict__ data_batch,
-    cuDoubleComplex* __restrict__ state_batch,
-    size_t num_samples,
-    size_t state_len,
-    unsigned int num_qubits,
-    unsigned int data_len,
-    int enable_zz,
-    double norm_factor
-) {
-    extern __shared__ cuDoubleComplex shared_state[];
-
-    size_t tid = threadIdx.x;
-    size_t sample_idx = blockIdx.x;
-
-    if (sample_idx >= num_samples) return;
-
-    const double* data = data_batch + sample_idx * data_len;
-    cuDoubleComplex* state = state_batch + sample_idx * state_len;
-
-    for (size_t i = tid; i < state_len; i += blockDim.x) {
-        double phase = compute_phase_tc(data, i, num_qubits, enable_zz);
-        double cos_phase, sin_phase;
-        sincos(phase, &sin_phase, &cos_phase);
-        shared_state[i] = make_cuDoubleComplex(cos_phase, sin_phase);
-    }
-    __syncthreads();
-
-    for (unsigned int stage = 0; stage < num_qubits; ++stage) {
-        size_t stride = 1ULL << stage;
-        size_t block_size = stride << 1;
-        size_t num_pairs = state_len >> 1;
-
-        for (size_t pair_idx = tid; pair_idx < num_pairs; pair_idx += blockDim.x) {
-            size_t block_idx = pair_idx / stride;
-            size_t pair_offset = pair_idx % stride;
-            size_t i = block_idx * block_size + pair_offset;
-            size_t j = i + stride;
-
-            cuDoubleComplex a = shared_state[i];
-            cuDoubleComplex b = shared_state[j];
-
-            shared_state[i] = cuCadd(a, b);
-            shared_state[j] = cuCsub(a, b);
-        }
-        __syncthreads();
-    }
-
-    for (size_t i = tid; i < state_len; i += blockDim.x) {
-        cuDoubleComplex val = shared_state[i];
-        state[i] = make_cuDoubleComplex(
-            cuCreal(val) * norm_factor,
-            cuCimag(val) * norm_factor
-        );
-    }
-}
-
 // Phase 2: GEMM 準備 - 將 Batch 展開並計算初始 Phase (純實數/虛數分離)
 __global__ void iqp_phase_split_kernel(
     const double* __restrict__ data_batch,
@@ -352,6 +293,71 @@ extern "C" int launch_iqp_encode_tc(
     return (int)cudaGetLastError();
 }
 
+// PR8 unfused fallback for N < 6 (extreme kernel dispatch starts at N=6).
+static int iqp_native_run_small_fp64(
+    const double* data_batch_d,
+    cuDoubleComplex* state_batch_d,
+    size_t num_samples,
+    size_t state_len,
+    unsigned int num_qubits,
+    unsigned int data_len,
+    int enable_zz,
+    cudaStream_t stream
+) {
+    size_t total_elements = num_samples * state_len;
+
+    static double *d_state_real = nullptr, *d_state_imag = nullptr;
+    static double *d_out_real = nullptr, *d_out_imag = nullptr;
+    static size_t allocated_elements = 0;
+
+    auto free_buffers = [&]() {
+        if (d_state_real) {
+            cudaFree(d_state_real); cudaFree(d_state_imag);
+            cudaFree(d_out_real);   cudaFree(d_out_imag);
+            d_state_real = nullptr;
+            allocated_elements = 0;
+        }
+    };
+
+    if (total_elements > allocated_elements) {
+        free_buffers();
+        cudaError_t err;
+        err = cudaMalloc(&d_state_real, total_elements * sizeof(double));
+        if (err != cudaSuccess) return (int)err;
+        err = cudaMalloc(&d_state_imag, total_elements * sizeof(double));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_out_real, total_elements * sizeof(double));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_out_imag, total_elements * sizeof(double));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        allocated_elements = total_elements;
+    }
+
+    const size_t blocks = (total_elements + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE;
+    iqp_phase_split_kernel<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
+        data_batch_d, d_state_real, d_state_imag, num_samples, state_len, num_qubits, data_len, enable_zz
+    );
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) return (int)err;
+
+    qdp::native::ImplicitHadamardNativeEngine engine;
+    double norm_factor = 1.0 / (double)state_len;
+    engine.execute_implicit_hadamard_fp64(
+        d_state_real, d_out_real, num_samples, state_len, state_len, norm_factor, stream, false, 0
+    );
+    engine.execute_implicit_hadamard_fp64(
+        d_state_imag, d_out_imag, num_samples, state_len, state_len, norm_factor, stream, false, 0
+    );
+
+    recombine_complex_kernel<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
+        d_out_real, d_out_imag, state_batch_d, total_elements
+    );
+    err = cudaGetLastError();
+    if (err != cudaSuccess) return (int)err;
+    err = cudaStreamSynchronize(stream);
+    return (int)err;
+}
+
 static int iqp_native_run_kronecker_fp64(
     const double* data_batch_d,
     cuDoubleComplex* state_batch_d,
@@ -467,13 +473,20 @@ extern "C" int launch_iqp_encode_native(
         : num_qubits;
 
     if (num_qubits <= 12) {
-        double norm_factor = 1.0 / (double)state_len;
-        cudaFuncSetAttribute(
-            iqp_native_phase_fwt_normalize_fp64_kernel,
-            cudaFuncAttributeMaxDynamicSharedMemorySize,
-            65536
-        );
-        iqp_native_phase_fwt_normalize_fp64_kernel<<<num_samples, DEFAULT_BLOCK_SIZE, state_len * sizeof(cuDoubleComplex), stream>>>(
+        if (num_qubits >= 6) {
+            qdp::native::ImplicitHadamardNativeEngine engine;
+            engine.execute_iqp_fused_fp64(
+                data_batch_d,
+                state_batch_d,
+                num_samples,
+                num_qubits,
+                data_len,
+                enable_zz,
+                stream
+            );
+            return (int)cudaGetLastError();
+        }
+        return iqp_native_run_small_fp64(
             data_batch_d,
             static_cast<cuDoubleComplex*>(state_batch_d),
             num_samples,
@@ -481,9 +494,8 @@ extern "C" int launch_iqp_encode_native(
             num_qubits,
             data_len,
             enable_zz,
-            norm_factor
+            stream
         );
-        return (int)cudaGetLastError();
     }
 
     return iqp_native_run_kronecker_fp64(

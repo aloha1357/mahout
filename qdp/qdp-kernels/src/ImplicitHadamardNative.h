@@ -46,6 +46,17 @@ public:
         size_t batch_rows = 0
     );
 
+    // PR9: Fuse IQP phase encoding with native_fp64_extreme_fwt (PR8's fastest kernel).
+    void execute_iqp_fused_fp64(
+        const double* d_data_batch,
+        void*         d_state_batch,
+        size_t        num_samples,
+        unsigned int  num_qubits,
+        unsigned int  data_len,
+        int           enable_zz,
+        cudaStream_t  stream = 0
+    );
+
 };
 
 } // namespace native

@@ -15,11 +15,105 @@
 // limitations under the License.
 
 #include "ImplicitHadamardNative.h"
+#include <cuComplex.h>
 #include <cmath>
 #include <stdio.h>
 
 namespace qdp {
 namespace native {
+
+__device__ double compute_phase_iqp(
+    const double* __restrict__ data,
+    size_t x,
+    unsigned int num_qubits,
+    int enable_zz
+) {
+    double phase = 0.0;
+    for (unsigned int i = 0; i < num_qubits; ++i) {
+        phase += data[i] * (double)((x >> i) & 1U);
+    }
+    if (enable_zz) {
+        unsigned int pair_idx = num_qubits;
+        for (unsigned int i = 0; i < num_qubits; ++i) {
+            for (unsigned int j = i + 1; j < num_qubits; ++j) {
+                phase += data[pair_idx] * (double)(((x >> i) & 1U) & ((x >> j) & 1U));
+                pair_idx++;
+            }
+        }
+    }
+    return phase;
+}
+
+template<int THREADS>
+__device__ __forceinline__ void native_fp64_extreme_fwt_transform(
+    double reg[64], int NUM_B, int N, int tid, double* smem_d
+) {
+    int max_warp_stage = (N < 5) ? N : 5;
+    #pragma unroll
+    for (int stage = 0; stage < max_warp_stage; ++stage) {
+        int stride = 1 << stage;
+        #pragma unroll
+        for (int b = 0; b < NUM_B; ++b) {
+            double peer = __shfl_xor_sync(0xffffffff, reg[b], stride);
+            if ((tid & stride) == 0) {
+                reg[b] = reg[b] + peer;
+            } else {
+                reg[b] = peer - reg[b];
+            }
+        }
+    }
+
+    if (N > 5) {
+        int max_smem_stage = (N < 8) ? N : 8;
+
+        for (int b_start = 0; b_start < NUM_B; b_start += 16) {
+            int b_count = ((NUM_B - b_start) < 16) ? (NUM_B - b_start) : 16;
+
+            #pragma unroll
+            for (int i = 0; i < 16; ++i) {
+                if (i < b_count) smem_d[i * THREADS + tid] = reg[b_start + i];
+            }
+            __syncthreads();
+
+            for (int stage = 5; stage < max_smem_stage; ++stage) {
+                int stride = 1 << stage;
+                #pragma unroll
+                for (int i = 0; i < 16; ++i) {
+                    if (i < b_count) {
+                        double my_val = smem_d[i * THREADS + tid];
+                        double peer_val = smem_d[i * THREADS + (tid ^ stride)];
+                        reg[b_start + i] = ((tid & stride) == 0) ? (my_val + peer_val) : (peer_val - my_val);
+                    }
+                }
+                __syncthreads();
+
+                if (stage < max_smem_stage - 1) {
+                    #pragma unroll
+                    for (int i = 0; i < 16; ++i) {
+                        if (i < b_count) smem_d[i * THREADS + tid] = reg[b_start + i];
+                    }
+                    __syncthreads();
+                }
+            }
+        }
+    }
+
+    if (N > 8) {
+        #pragma unroll
+        for (int stage = 8; stage < N; ++stage) {
+            int b_stride = 1 << (stage - 8);
+            #pragma unroll
+            for (int b = 0; b < 64; ++b) {
+                if (b < NUM_B && (b & b_stride) == 0) {
+                    double a = reg[b];
+                    double b_val = reg[b | b_stride];
+                    reg[b] = a + b_val;
+                    reg[b | b_stride] = a - b_val;
+                }
+            }
+        }
+    }
+}
 
 // A highly optimized but simple shared-memory butterfly FWT for FP32/FP16.
 // For large N, we would use Kronecker decomposition, but here we provide the
@@ -917,81 +1011,58 @@ __global__ void __launch_bounds__(THREADS) native_fp64_extreme_fwt_kernel(
         reg[b] = in_chunk[b * THREADS + tid];
     }
 
-    // Stages 0 to 4: Warp Shuffles (Strides 1, 2, 4, 8, 16)
-    int max_warp_stage = (N < 5) ? N : 5;
-    #pragma unroll
-    for (int stage = 0; stage < max_warp_stage; ++stage) {
-        int stride = 1 << stage;
-        #pragma unroll
-        for (int b = 0; b < NUM_B; ++b) {
-            double peer = __shfl_xor_sync(0xffffffff, reg[b], stride);
-            if ((tid & stride) == 0) {
-                reg[b] = reg[b] + peer;
-            } else {
-                reg[b] = peer - reg[b];
-            }
-        }
-    }
-
-    // Stages 5 to 7: Cross-Warp via SMEM (Strides 32, 64, 128)
-    if (N > 5) {
-        extern __shared__ double smem_d[];
-        int max_smem_stage = (N < 8) ? N : 8;
-
-        // Process in batches of 16 'b's to limit SMEM to 32KB (16 * 256 * 8 bytes)
-        for (int b_start = 0; b_start < NUM_B; b_start += 16) {
-            int b_count = ((NUM_B - b_start) < 16) ? (NUM_B - b_start) : 16;
-
-            #pragma unroll
-            for (int i = 0; i < 16; ++i) {
-                if (i < b_count) smem_d[i * THREADS + tid] = reg[b_start + i];
-            }
-            __syncthreads();
-
-            for (int stage = 5; stage < max_smem_stage; ++stage) {
-                int stride = 1 << stage;
-                #pragma unroll
-                for (int i = 0; i < 16; ++i) {
-                    if (i < b_count) {
-                        double my_val = smem_d[i * THREADS + tid];
-                        double peer_val = smem_d[i * THREADS + (tid ^ stride)];
-                        reg[b_start + i] = ((tid & stride) == 0) ? (my_val + peer_val) : (peer_val - my_val);
-                    }
-                }
-                __syncthreads();
-
-                if (stage < max_smem_stage - 1) {
-                    #pragma unroll
-                    for (int i = 0; i < 16; ++i) {
-                        if (i < b_count) smem_d[i * THREADS + tid] = reg[b_start + i];
-                    }
-                    __syncthreads();
-                }
-            }
-        }
-    }
-
-    // Stages 8 to 13: Intra-Thread (Strides 256, 512, 1024, 2048, 4096, 8192)
-    if (N > 8) {
-        #pragma unroll
-        for (int stage = 8; stage < N; ++stage) {
-            int b_stride = 1 << (stage - 8);
-            #pragma unroll
-            for (int b = 0; b < 64; ++b) {
-                if (b < NUM_B && (b & b_stride) == 0) {
-                    double a = reg[b];
-                    double b_val = reg[b | b_stride];
-                    reg[b] = a + b_val;
-                    reg[b | b_stride] = a - b_val;
-                }
-            }
-        }
-    }
+    extern __shared__ double smem_d[];
+    native_fp64_extreme_fwt_transform<THREADS>(reg, NUM_B, N, tid, smem_d);
 
     #pragma unroll
     for (int b = 0; b < NUM_B; ++b) {
         if (norm_factor != 1.0) reg[b] *= norm_factor;
         out_chunk[b * THREADS + tid] = reg[b];
+    }
+}
+
+// PR9: Phase + native_fp64_extreme_fwt (real/imag) + normalize in one launch per sample.
+template<int N, int THREADS>
+__global__ void __launch_bounds__(THREADS) native_fp64_extreme_iqp_fused_kernel(
+    const double* __restrict__ data_batch,
+    cuDoubleComplex* __restrict__ state_batch,
+    size_t num_samples,
+    unsigned int num_qubits,
+    unsigned int data_len,
+    int enable_zz,
+    double norm_factor
+) {
+    size_t sample_idx = blockIdx.x;
+    if (sample_idx >= num_samples) return;
+
+    int tid = threadIdx.x;
+    constexpr int CHUNK_LEN = 1 << N;
+    constexpr int NUM_B = CHUNK_LEN / THREADS;
+
+    const double* data = data_batch + sample_idx * data_len;
+    cuDoubleComplex* out = state_batch + sample_idx * CHUNK_LEN;
+
+    double reg_real[64];
+    double reg_imag[64];
+
+    #pragma unroll
+    for (int b = 0; b < NUM_B; ++b) {
+        int idx = b * THREADS + tid;
+        double phase = compute_phase_iqp(data, idx, num_qubits, enable_zz);
+        double sin_phase, cos_phase;
+        sincos(phase, &sin_phase, &cos_phase);
+        reg_real[b] = cos_phase;
+        reg_imag[b] = sin_phase;
+    }
+
+    extern __shared__ double smem_d[];
+    native_fp64_extreme_fwt_transform<THREADS>(reg_real, NUM_B, N, tid, smem_d);
+    native_fp64_extreme_fwt_transform<THREADS>(reg_imag, NUM_B, N, tid, smem_d);
+
+    #pragma unroll
+    for (int b = 0; b < NUM_B; ++b) {
+        int idx = b * THREADS + tid;
+        out[idx] = make_cuDoubleComplex(reg_real[b] * norm_factor, reg_imag[b] * norm_factor);
     }
 }
 
@@ -1068,6 +1139,54 @@ __global__ void __launch_bounds__(256) native_fp64_interblock_fwt_kernel(
 
         out_state[global_r] = v0;
         out_state[global_r + (chunk_size >> 1)] = v1;
+    }
+}
+
+void ImplicitHadamardNativeEngine::execute_iqp_fused_fp64(
+    const double* d_data_batch,
+    void* d_state_batch,
+    size_t num_samples,
+    unsigned int num_qubits,
+    unsigned int data_len,
+    int enable_zz,
+    cudaStream_t stream
+) {
+    auto* state = static_cast<cuDoubleComplex*>(d_state_batch);
+    double norm_factor = 1.0 / (double)(1ULL << num_qubits);
+    int n = static_cast<int>(num_qubits);
+    int smem_size = 16 * 256 * static_cast<int>(sizeof(double));
+
+    switch (n) {
+        case 6:
+            native_fp64_extreme_iqp_fused_kernel<6, 64><<<num_samples, 64, 16 * 64 * (int)sizeof(double), stream>>>(
+                d_data_batch, state, num_samples, num_qubits, data_len, enable_zz, norm_factor);
+            return;
+        case 7:
+            native_fp64_extreme_iqp_fused_kernel<7, 128><<<num_samples, 128, 16 * 128 * (int)sizeof(double), stream>>>(
+                d_data_batch, state, num_samples, num_qubits, data_len, enable_zz, norm_factor);
+            return;
+        case 8:
+            native_fp64_extreme_iqp_fused_kernel<8, 256><<<num_samples, 256, smem_size, stream>>>(
+                d_data_batch, state, num_samples, num_qubits, data_len, enable_zz, norm_factor);
+            return;
+        case 9:
+            native_fp64_extreme_iqp_fused_kernel<9, 256><<<num_samples, 256, smem_size, stream>>>(
+                d_data_batch, state, num_samples, num_qubits, data_len, enable_zz, norm_factor);
+            return;
+        case 10:
+            native_fp64_extreme_iqp_fused_kernel<10, 256><<<num_samples, 256, smem_size, stream>>>(
+                d_data_batch, state, num_samples, num_qubits, data_len, enable_zz, norm_factor);
+            return;
+        case 11:
+            native_fp64_extreme_iqp_fused_kernel<11, 256><<<num_samples, 256, smem_size, stream>>>(
+                d_data_batch, state, num_samples, num_qubits, data_len, enable_zz, norm_factor);
+            return;
+        case 12:
+            native_fp64_extreme_iqp_fused_kernel<12, 256><<<num_samples, 256, smem_size, stream>>>(
+                d_data_batch, state, num_samples, num_qubits, data_len, enable_zz, norm_factor);
+            return;
+        default:
+            return;
     }
 }
 
