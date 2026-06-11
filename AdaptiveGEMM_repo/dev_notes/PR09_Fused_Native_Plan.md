@@ -196,7 +196,8 @@ PR9a: `iqp_native_phase_fwt_normalize_fp64_kernel` in `iqp_tc.cu`; `launch_iqp_e
 3. ~~Implement 9.1 fused fp64 @ N≤12~~ ✅
 4. **NCU / E2E benchmark** PR8 vs PR9a encode-only @ N=12,16 → `reports/PR009_Benchmark.md` on `main`.
 5. ~~Implement 9.2 fused-transpose + 2-step Kronecker~~ ✅ (`29a84d0d7`)
-6. **NCU + E2E benchmark** PR8 vs PR9 @ N=12,14,16 → optimize scatter epilogue if needed → `reports/PR009_Benchmark.md`.
+6. ~~NCU + E2E benchmark~~ ✅ `reports/PR009_Benchmark.md` on `main` (`8c3facdcb`).
+7. NCU GM-bytes / launch-count study; tile scatter if needed.
 
 ---
 
