@@ -44,13 +44,22 @@ Verification: Native vs FWT and Native vs TC **PASS** at all three N.
 
 ---
 
-## Reproduce
+## Reproduce (one command)
+
+**Branch:** `pr8-native-hadamard-benchmark` tip `1a9d58b49`
 
 ```bash
-wsl bash scripts/build_wsl.sh
-wsl bash scripts/test_native_wsl.sh
-wsl bash scripts/bench_native_wsl.sh
+wsl bash scripts/reproduce_pr8.sh
 ```
+
+| Step | What |
+|------|------|
+| 1 | `maturin develop --release` |
+| 2 | `pytest test_iqp_native_path.py` + `test_iqp_tc_path.py` (**41** tests) |
+| 3 | `pytest test_iqp_native_e2e.py` (encode → DLPack → forward) |
+| 4 | `benchmark_e2e.py` A/B @ N=12,14,16 |
+
+Individual scripts: `build_wsl.sh`, `test_native_wsl.sh`, `bench_native_wsl.sh`
 
 ---
 
