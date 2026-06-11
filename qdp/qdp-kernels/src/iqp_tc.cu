@@ -740,23 +740,20 @@ static int iqp_native_run_kronecker_fp32(
     qdp::native::ImplicitHadamardNativeEngine engine;
     float norm_factor = 1.0f / (float)state_len;
 
+    // PR9d: 2-step Kronecker with fused-transpose epilogue (matches fp64 PR9b).
     engine.execute_implicit_hadamard_fp32(
-        d_state_real, d_temp_real, num_samples * dim1, dim2, dim2, 1.0f, stream, false, 0
+        d_state_real, d_temp_real, num_samples * dim1, dim2, dim2, 1.0f, stream, true, dim1
     );
-    iqp_tc_launch_transpose_f32(d_temp_real, d_out_real, (int)num_samples, dim1, dim2, stream);
     engine.execute_implicit_hadamard_fp32(
-        d_state_imag, d_temp_imag, num_samples * dim1, dim2, dim2, 1.0f, stream, false, 0
+        d_state_imag, d_temp_imag, num_samples * dim1, dim2, dim2, 1.0f, stream, true, dim1
     );
-    iqp_tc_launch_transpose_f32(d_temp_imag, d_out_imag, (int)num_samples, dim1, dim2, stream);
 
     engine.execute_implicit_hadamard_fp32(
-        d_out_real, d_temp_real, num_samples * dim2, dim1, dim1, norm_factor, stream, false, 0
+        d_temp_real, d_out_real, num_samples * dim2, dim1, dim1, norm_factor, stream, true, dim2
     );
-    iqp_tc_launch_transpose_f32(d_temp_real, d_out_real, (int)num_samples, dim2, dim1, stream);
     engine.execute_implicit_hadamard_fp32(
-        d_out_imag, d_temp_imag, num_samples * dim2, dim1, dim1, norm_factor, stream, false, 0
+        d_temp_imag, d_out_imag, num_samples * dim2, dim1, dim1, norm_factor, stream, true, dim2
     );
-    iqp_tc_launch_transpose_f32(d_temp_imag, d_out_imag, (int)num_samples, dim2, dim1, stream);
 
     recombine_complex_kernel_f32<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
         d_out_real, d_out_imag, state_batch_d, total_elements

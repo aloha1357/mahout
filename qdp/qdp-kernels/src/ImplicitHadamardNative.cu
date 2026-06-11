@@ -668,6 +668,52 @@ __global__ void __launch_bounds__(THREADS) native_fp32_extreme_fwt_kernel(
     }
 }
 
+// Scalar FP32 extreme FWT with optional fused-transpose epilogue (Kronecker PR9d).
+template<int N, int THREADS>
+__global__ void __launch_bounds__(THREADS) native_fp32_extreme_fwt_kernel_scalar(
+    const float* __restrict__ in_state,
+    float* __restrict__ out_state,
+    float norm_factor,
+    int fused_transpose,
+    size_t k_cols,
+    size_t batch_rows
+) {
+    size_t chunk_idx = blockIdx.x;
+    int tid = threadIdx.x;
+    constexpr int CHUNK_LEN = 1 << N;
+    constexpr int NUM_B = CHUNK_LEN / THREADS;
+
+    const float* in_chunk = in_state + chunk_idx * CHUNK_LEN;
+    float* out_chunk = out_state + chunk_idx * CHUNK_LEN;
+
+    float reg[64];
+
+    #pragma unroll
+    for (int b = 0; b < NUM_B; ++b) {
+        reg[b] = in_chunk[b * THREADS + tid];
+    }
+
+    extern __shared__ float smem_f[];
+    native_fp32_extreme_fwt_transform<THREADS>(reg, NUM_B, N, tid, smem_f);
+
+    #pragma unroll
+    for (int b = 0; b < NUM_B; ++b) {
+        float val = reg[b];
+        if (norm_factor != 1.0f) val *= norm_factor;
+        if (fused_transpose && batch_rows > 0) {
+            int r = static_cast<int>(chunk_idx);
+            int c = b * THREADS + tid;
+            int batch_idx = r / static_cast<int>(batch_rows);
+            int r_in_batch = r % static_cast<int>(batch_rows);
+            out_state[static_cast<size_t>(batch_idx) * (k_cols * batch_rows)
+                      + static_cast<size_t>(c) * batch_rows
+                      + static_cast<size_t>(r_in_batch)] = val;
+        } else {
+            out_chunk[b * THREADS + tid] = val;
+        }
+    }
+}
+
 template<int N, int THREADS, int NUM_B>
 __global__ void __launch_bounds__(THREADS)
 native_fp32_extreme_fwt_kernel_v2(
@@ -962,6 +1008,97 @@ native_fp32_interblock_fwt_v2_kernel(
     }
 }
 
+static void launch_native_fp32_extreme_fwt(
+    int num_qubits,
+    size_t grid_m,
+    const float* d_A,
+    float* d_C,
+    float norm_factor,
+    cudaStream_t stream,
+    bool fused_transpose,
+    size_t k_cols,
+    size_t batch_rows
+) {
+    const int ftrans = fused_transpose ? 1 : 0;
+    const int smem_size = (1 << num_qubits) * static_cast<int>(sizeof(float));
+    if (fused_transpose) {
+        switch (num_qubits) {
+            case 6:
+                native_fp32_extreme_fwt_kernel_scalar<6, 64><<<grid_m, 64, 16 * 64 * (int)sizeof(float), stream>>>(
+                    d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+                break;
+            case 7:
+                native_fp32_extreme_fwt_kernel_scalar<7, 128><<<grid_m, 128, 16 * 128 * (int)sizeof(float), stream>>>(
+                    d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+                break;
+            case 8:
+                native_fp32_extreme_fwt_kernel_scalar<8, 256><<<grid_m, 256, smem_size, stream>>>(
+                    d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+                break;
+            case 9:
+                native_fp32_extreme_fwt_kernel_scalar<9, 256><<<grid_m, 256, smem_size, stream>>>(
+                    d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+                break;
+            case 10:
+                native_fp32_extreme_fwt_kernel_scalar<10, 256><<<grid_m, 256, smem_size, stream>>>(
+                    d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+                break;
+            case 11:
+                native_fp32_extreme_fwt_kernel_scalar<11, 256><<<grid_m, 256, smem_size, stream>>>(
+                    d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+                break;
+            case 12:
+                native_fp32_extreme_fwt_kernel_scalar<12, 256><<<grid_m, 256, smem_size, stream>>>(
+                    d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+                break;
+            case 13:
+                native_fp32_extreme_fwt_kernel_scalar<13, 256><<<grid_m, 256, smem_size, stream>>>(
+                    d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+                break;
+            case 14:
+                native_fp32_extreme_fwt_kernel_scalar<14, 256><<<grid_m, 256, smem_size, stream>>>(
+                    d_A, d_C, norm_factor, ftrans, k_cols, batch_rows);
+                break;
+            default:
+                break;
+        }
+        return;
+    }
+    switch (num_qubits) {
+        case 7:
+            native_fp32_extreme_fwt_kernel<7, 32, 1><<<grid_m, 32, smem_size, stream>>>(d_A, d_C, norm_factor);
+            break;
+        case 8:
+            native_fp32_extreme_fwt_kernel<8, 64, 1><<<grid_m, 64, smem_size, stream>>>(d_A, d_C, norm_factor);
+            break;
+        case 9:
+            native_fp32_extreme_fwt_kernel<9, 128, 1><<<grid_m, 128, smem_size, stream>>>(d_A, d_C, norm_factor);
+            break;
+        case 10:
+            native_fp32_extreme_fwt_kernel<10, 256, 1><<<grid_m, 256, smem_size, stream>>>(d_A, d_C, norm_factor);
+            break;
+        case 11:
+            native_fp32_extreme_fwt_kernel<11, 256, 2><<<grid_m, 256, smem_size, stream>>>(d_A, d_C, norm_factor);
+            break;
+        case 12:
+            native_fp32_extreme_fwt_kernel<12, 256, 4><<<grid_m, 256, smem_size, stream>>>(d_A, d_C, norm_factor);
+            break;
+        case 13:
+            native_fp32_extreme_fwt_kernel<13, 256, 8><<<grid_m, 256, smem_size, stream>>>(d_A, d_C, norm_factor);
+            break;
+        case 14:
+            cudaFuncSetAttribute(
+                native_fp32_extreme_fwt_kernel<14, 256, 16>,
+                cudaFuncAttributeMaxDynamicSharedMemorySize,
+                65536
+            );
+            native_fp32_extreme_fwt_kernel<14, 256, 16><<<grid_m, 256, smem_size, stream>>>(d_A, d_C, norm_factor);
+            break;
+        default:
+            break;
+    }
+}
+
 void ImplicitHadamardNativeEngine::execute_implicit_hadamard_fp32(
     const float* d_A,
     float*       d_C,
@@ -975,26 +1112,19 @@ void ImplicitHadamardNativeEngine::execute_implicit_hadamard_fp32(
     int num_qubits = 0;
     while ((1ULL << num_qubits) < state_len) num_qubits++;
 
-    // Fast Path for N <= 15 using Tri Dao style extreme kernel
-    if (num_qubits <= 15 && num_qubits >= 7) {
-        int smem_size = state_len * sizeof(float);
-        switch (num_qubits) {
-            case 7: native_fp32_extreme_fwt_kernel<7, 32, 1><<<m, 32, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 8: native_fp32_extreme_fwt_kernel<8, 64, 1><<<m, 64, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 9: native_fp32_extreme_fwt_kernel<9, 128, 1><<<m, 128, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 10: native_fp32_extreme_fwt_kernel<10, 256, 1><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 11: native_fp32_extreme_fwt_kernel<11, 256, 2><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 12: native_fp32_extreme_fwt_kernel<12, 256, 4><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 13: native_fp32_extreme_fwt_kernel<13, 256, 8><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor); return;
-            case 14:
-                cudaFuncSetAttribute(native_fp32_extreme_fwt_kernel<14, 256, 16>, cudaFuncAttributeMaxDynamicSharedMemorySize, 65536);
-                native_fp32_extreme_fwt_kernel<14, 256, 16><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor);
-                return;
-            case 15:
-                smem_size = 4 * 256 * 4 * sizeof(float); // 16KB
-                native_fp32_extreme_fwt_kernel_v2<15, 256, 32><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor);
-                return;
-        }
+    // Fast Path for N <= 14 (optional fused-transpose epilogue for Kronecker)
+    if (num_qubits <= 14 && num_qubits >= 6) {
+        const bool fused_transpose = transpose_batch && batch_rows > 0;
+        launch_native_fp32_extreme_fwt(
+            num_qubits, m, d_A, d_C, norm_factor, stream,
+            fused_transpose, k, batch_rows
+        );
+        return;
+    }
+    if (num_qubits == 15) {
+        const int smem_size = 4 * 256 * 4 * static_cast<int>(sizeof(float));
+        native_fp32_extreme_fwt_kernel_v2<15, 256, 32><<<m, 256, smem_size, stream>>>(d_A, d_C, norm_factor);
+        return;
     }
 
     int remaining_qubits = num_qubits;
@@ -1013,16 +1143,18 @@ void ImplicitHadamardNativeEngine::execute_implicit_hadamard_fp32(
             int smem_size = chunk_size * sizeof(float);
 
             switch (qubits_this_pass) {
-                case 7: native_fp32_extreme_fwt_kernel<7, 32, 1><<<num_chunks, 32, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 8: native_fp32_extreme_fwt_kernel<8, 64, 1><<<num_chunks, 64, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 9: native_fp32_extreme_fwt_kernel<9, 128, 1><<<num_chunks, 128, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 10: native_fp32_extreme_fwt_kernel<10, 256, 1><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 11: native_fp32_extreme_fwt_kernel<11, 256, 2><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 12: native_fp32_extreme_fwt_kernel<12, 256, 4><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm); break;
-                case 13: native_fp32_extreme_fwt_kernel<13, 256, 8><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm); break;
+                case 6:
+                case 7:
+                case 8:
+                case 9:
+                case 10:
+                case 11:
+                case 12:
+                case 13:
                 case 14:
-                    cudaFuncSetAttribute(native_fp32_extreme_fwt_kernel<14, 256, 16>, cudaFuncAttributeMaxDynamicSharedMemorySize, 65536);
-                    native_fp32_extreme_fwt_kernel<14, 256, 16><<<num_chunks, 256, smem_size, stream>>>(d_A, d_C, pass_norm);
+                    launch_native_fp32_extreme_fwt(
+                        qubits_this_pass, num_chunks, d_A, d_C, pass_norm, stream, false, 0, 0
+                    );
                     break;
                 case 15:
                     smem_size = 4 * 256 * 4 * sizeof(float); // 16KB

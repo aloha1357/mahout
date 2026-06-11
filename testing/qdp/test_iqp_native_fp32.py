@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""PR9c: FP32 native IQP encode smoke tests."""
+"""PR9c/PR9d: FP32 native IQP encode tests (fused N<=12, Kronecker N>12)."""
 
 import pytest
 import torch
@@ -78,12 +78,21 @@ def test_native_fp32_matches_fp64_fused(engine_f32, engine_f64, num_qubits, enco
 @requires_qdp
 @pytest.mark.gpu
 @pytest.mark.parametrize("num_qubits", [14, 16])
-def test_native_fp32_kronecker_finite(engine_f32, num_qubits):
-    """N>12 uses explicit-transpose Kronecker (fp32); smoke test only."""
+def test_native_fp32_kronecker_matches_fp64(engine_f32, engine_f64, num_qubits):
+    """N>12 uses fused-transpose Kronecker (PR9d); compare against fp64 reference."""
     batch_size = 8
-    data = torch.randn(batch_size, num_qubits, dtype=torch.float32).numpy()
-    out = torch.from_dlpack(
-        engine_f32.encode_batch_native(data, num_qubits, "iqp-z")
+    data_f32 = torch.randn(batch_size, num_qubits, dtype=torch.float32).numpy()
+    data_f64 = data_f32.astype("float64")
+
+    out_f32 = torch.from_dlpack(
+        engine_f32.encode_batch_native(data_f32, num_qubits, "iqp-z")
     ).clone()
-    assert out.shape == (batch_size, 1 << num_qubits)
-    assert torch.isfinite(out).all()
+    out_f64 = torch.from_dlpack(
+        engine_f64.encode_batch_native(data_f64, num_qubits, "iqp-z")
+    ).clone()
+
+    assert out_f32.shape == (batch_size, 1 << num_qubits)
+    assert torch.isfinite(out_f32).all()
+
+    err = (out_f32.to(torch.complex128) - out_f64.to(torch.complex128)).abs().max().item()
+    assert err < 1e-4, f"FP32 vs FP64 Kronecker err {err} at N={num_qubits}"
