@@ -98,7 +98,9 @@ def test_large_n_native_smoke(engine, num_qubits, batch_size):
     data = torch.randn(batch_size, data_len, dtype=torch.float64).numpy()
     state_len = 1 << num_qubits
 
-    native_state = torch.from_dlpack(engine.encode_batch_native(data, num_qubits, "iqp"))
+    native_state = torch.from_dlpack(
+        engine.encode_batch_native(data, num_qubits, "iqp")
+    )
     assert native_state.shape == (batch_size, state_len)
     assert torch.isfinite(native_state).all()
 

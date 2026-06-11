@@ -13,8 +13,8 @@ namespace native {
 //
 // PR011: Native FP32/FP16 Blocked TC-FWT
 //
-// Bypasses the Ozaki Scheme entirely to provide extremely fast FP32/FP16 
-// execution for Quantum Machine Learning (QML) and other applications where 
+// Bypasses the Ozaki Scheme entirely to provide extremely fast FP32/FP16
+// execution for Quantum Machine Learning (QML) and other applications where
 // FP64 numerical stability is not strictly required.
 // ---------------------------------------------------------------------------
 class ImplicitHadamardNativeEngine {
@@ -50,4 +50,3 @@ public:
 
 } // namespace native
 } // namespace qdp
-

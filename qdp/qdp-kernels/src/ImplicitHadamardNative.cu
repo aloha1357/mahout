@@ -1,3 +1,19 @@
+//
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "ImplicitHadamardNative.h"
 #include <cmath>
 #include <stdio.h>
@@ -17,30 +33,30 @@ __global__ void native_fp32_butterfly_kernel(
     size_t batch_idx = blockIdx.y;
     size_t state_len = n;
     int pairs_per_sample = state_len >> 1;
-    
+
     // Pointer to this batch's state
     float* local_state = state + batch_idx * state_len;
-    
+
     int num_qubits = 0;
     while ((1ULL << num_qubits) < state_len) num_qubits++;
-    
+
     // We can do global memory butterfly stages:
     for (int stage = 0; stage < num_qubits; ++stage) {
         int stride = 1 << stage;
         int block_size = stride << 1;
-        
-        for (int pair_idx = blockIdx.x * blockDim.x + threadIdx.x; 
-             pair_idx < pairs_per_sample; 
+
+        for (int pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
+             pair_idx < pairs_per_sample;
              pair_idx += gridDim.x * blockDim.x) {
-            
+
             int block_idx = pair_idx / stride;
             int pair_offset = pair_idx % stride;
             int i = block_idx * block_size + pair_offset;
             int j = i + stride;
-            
+
             float a = local_state[i];
             float b = local_state[j];
-            
+
             local_state[i] = a + b;
             local_state[j] = a - b;
         }
@@ -61,30 +77,30 @@ __global__ void native_fp32_butterfly_first_stage_kernel(
     int block_size = 2;
     int pairs_per_sample = state_len >> 1;
     int total_pairs = num_samples * pairs_per_sample;
-    
+
     for (int global_pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
          global_pair_idx < total_pairs;
          global_pair_idx += gridDim.x * blockDim.x) {
-         
+
          int sample_idx = global_pair_idx / pairs_per_sample;
          int pair_idx = global_pair_idx % pairs_per_sample;
-         
+
          int block_idx = pair_idx / stride;
          int pair_offset = pair_idx % stride;
          int i = sample_idx * state_len + block_idx * block_size + pair_offset;
          int j = i + stride;
-         
+
          float a = in_state[i];
          float b = in_state[j];
-         
+
          float sum = a + b;
          float diff = a - b;
-         
+
          if (is_last_stage && norm_factor != 1.0f) {
              sum *= norm_factor;
              diff *= norm_factor;
          }
-         
+
          out_state[i] = sum;
          out_state[j] = diff;
     }
@@ -100,40 +116,40 @@ __global__ void native_fp32_opt_butterfly_kernel(
 ) {
     size_t batch_idx = blockIdx.x;
     if (batch_idx >= num_samples) return;
-    
+
     int tid = threadIdx.x;
-    
+
     const float4* in_batch = reinterpret_cast<const float4*>(in_state + batch_idx * state_len);
     float4* out_batch = reinterpret_cast<float4*>(out_state + batch_idx * state_len);
-    
+
     float4 v = in_batch[tid];
-    
+
     // Stage 0: Stride 1 (in-thread)
     float a0 = v.x + v.y;
     float b0 = v.x - v.y;
     float a1 = v.z + v.w;
     float b1 = v.z - v.w;
-    
+
     // Stage 1: Stride 2 (in-thread)
     v.x = a0 + a1;
     v.y = b0 + b1;
     v.z = a0 - a1;
     v.w = b0 - b1;
-    
+
     int num_qubits = 0;
     while ((1ULL << num_qubits) < state_len) num_qubits++;
-    
+
     // Stages 2 to min(num_qubits-1, 6): Warp shuffles
     int max_shuffle_stage = (num_qubits < 7) ? num_qubits : 7;
     for (int stage = 2; stage < max_shuffle_stage; ++stage) {
-        int stride_thread = 1 << (stage - 2); 
-        
+        int stride_thread = 1 << (stage - 2);
+
         float4 peer_v;
         peer_v.x = __shfl_xor_sync(0xffffffff, v.x, stride_thread);
         peer_v.y = __shfl_xor_sync(0xffffffff, v.y, stride_thread);
         peer_v.z = __shfl_xor_sync(0xffffffff, v.z, stride_thread);
         peer_v.w = __shfl_xor_sync(0xffffffff, v.w, stride_thread);
-        
+
         if ((tid & stride_thread) == 0) {
             v.x = v.x + peer_v.x;
             v.y = v.y + peer_v.y;
@@ -146,7 +162,7 @@ __global__ void native_fp32_opt_butterfly_kernel(
             v.w = peer_v.w - v.w;
         }
     }
-    
+
     if (num_qubits <= 7) {
         if (norm_factor != 1.0f) {
             v.x *= norm_factor;
@@ -157,26 +173,26 @@ __global__ void native_fp32_opt_butterfly_kernel(
         out_batch[tid] = v;
         return;
     }
-    
+
     extern __shared__ float smem[];
-    
+
     int idx0 = tid * 4;
     int idx1 = idx0 + 1;
     int idx2 = idx0 + 2;
     int idx3 = idx0 + 3;
-    
+
     smem[idx0 + (idx0 >> 5)] = v.x;
     smem[idx1 + (idx1 >> 5)] = v.y;
     smem[idx2 + (idx2 >> 5)] = v.z;
     smem[idx3 + (idx3 >> 5)] = v.w;
-    
+
     __syncthreads();
-    
+
     int num_threads = blockDim.x;
     for (int stage = 7; stage < num_qubits; ++stage) {
         int stride = 1 << stage;
         int block_size = stride << 1;
-        
+
         for (int p = 0; p < 2; ++p) {
             int pair_idx = tid + p * num_threads;
             if (pair_idx < (state_len >> 1)) {
@@ -184,32 +200,32 @@ __global__ void native_fp32_opt_butterfly_kernel(
                 int pair_offset = pair_idx % stride;
                 int i = block_idx * block_size + pair_offset;
                 int j = i + stride;
-                
+
                 int smem_i = i + (i >> 5);
                 int smem_j = j + (j >> 5);
-                
+
                 float a = smem[smem_i];
                 float b = smem[smem_j];
-                
+
                 smem[smem_i] = a + b;
                 smem[smem_j] = a - b;
             }
         }
         __syncthreads();
     }
-    
+
     v.x = smem[idx0 + (idx0 >> 5)];
     v.y = smem[idx1 + (idx1 >> 5)];
     v.z = smem[idx2 + (idx2 >> 5)];
     v.w = smem[idx3 + (idx3 >> 5)];
-    
+
     if (norm_factor != 1.0f) {
         v.x *= norm_factor;
         v.y *= norm_factor;
         v.z *= norm_factor;
         v.w *= norm_factor;
     }
-    
+
     out_batch[tid] = v;
 }
 
@@ -226,30 +242,30 @@ __global__ void native_fp32_butterfly_stage_kernel(
     int block_size = stride << 1;
     int pairs_per_sample = state_len >> 1;
     int total_pairs = num_samples * pairs_per_sample;
-    
+
     for (int global_pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
          global_pair_idx < total_pairs;
          global_pair_idx += gridDim.x * blockDim.x) {
-         
+
          int sample_idx = global_pair_idx / pairs_per_sample;
          int pair_idx = global_pair_idx % pairs_per_sample;
-         
+
          int block_idx = pair_idx / stride;
          int pair_offset = pair_idx % stride;
          int i = sample_idx * state_len + block_idx * block_size + pair_offset;
          int j = i + stride;
-         
+
          float a = state[i];
          float b = state[j];
-         
+
          float sum = a + b;
          float diff = a - b;
-         
+
          if (is_last_stage && norm_factor != 1.0f) {
              sum *= norm_factor;
              diff *= norm_factor;
          }
-         
+
          state[i] = sum;
          state[j] = diff;
     }
@@ -265,60 +281,60 @@ __global__ void native_fp32_interblock_fwt_kernel(
 ) {
     size_t batch_idx = blockIdx.y;
     int col_offset = blockIdx.x * TILE_COLS;
-    
+
     size_t rows = 1ULL << num_row_qubits;
     size_t cols = 1ULL << num_col_qubits;
-    
+
     const float* in_batch = in_state + batch_idx * (rows * cols);
     float* out_batch = out_state + batch_idx * (rows * cols);
-    
-    extern __shared__ float smem[]; 
-    
+
+    extern __shared__ float smem[];
+
     int tid = threadIdx.x;
     int num_threads = blockDim.x;
-    
+
     for (int idx = tid; idx < rows * TILE_COLS; idx += num_threads) {
         int r = idx / TILE_COLS;
         int c = idx % TILE_COLS;
         int global_idx = r * cols + (col_offset + c);
         smem[r * SMEM_PITCH + c] = in_batch[global_idx];
     }
-    
+
     __syncthreads();
-    
+
     for (int stage = 0; stage < num_row_qubits; ++stage) {
         int stride = 1 << stage;
         int block_size = stride << 1;
-        
+
         int pairs_per_col = rows >> 1;
         int total_pairs = pairs_per_col * TILE_COLS;
-        
+
         for (int idx = tid; idx < total_pairs; idx += num_threads) {
             int pair_idx = idx / TILE_COLS;
             int c = idx % TILE_COLS;
-            
+
             int block_idx = pair_idx / stride;
             int pair_offset = pair_idx % stride;
             int r_i = block_idx * block_size + pair_offset;
             int r_j = r_i + stride;
-            
+
             int smem_i = r_i * SMEM_PITCH + c;
             int smem_j = r_j * SMEM_PITCH + c;
-            
+
             float a = smem[smem_i];
             float b = smem[smem_j];
-            
+
             smem[smem_i] = a + b;
             smem[smem_j] = a - b;
         }
         __syncthreads();
     }
-    
+
     for (int idx = tid; idx < rows * TILE_COLS; idx += num_threads) {
         int r = idx / TILE_COLS;
         int c = idx % TILE_COLS;
         int global_idx = r * cols + (col_offset + c);
-        
+
         float val = smem[r * SMEM_PITCH + c];
         if (norm_factor != 1.0f) {
             val *= norm_factor;
@@ -633,7 +649,7 @@ native_fp32_interblock_shuffle_kernel(
     constexpr int ROWS = 1 << ROW_QUBITS;
     size_t cols = 1ULL << num_col_qubits;
     size_t batch_idx = blockIdx.y;
-    
+
     constexpr int COLS_PER_BLOCK = 256 / ROWS;
     int col_in_block = threadIdx.x / ROWS;
     int row_idx      = threadIdx.x % ROWS;
@@ -797,18 +813,18 @@ void ImplicitHadamardNativeEngine::execute_implicit_hadamard_fp32(
     int remaining_qubits = num_qubits;
     int current_qubit_offset = 0;
     int pass = 0;
-    
+
     // TIER 2: Optimized 2-Pass (N >= 16)
     while (remaining_qubits > 0) {
         int MAX_SMEM_QUBITS = (pass == 0) ? 15 : 8;
         int qubits_this_pass = (remaining_qubits > MAX_SMEM_QUBITS) ? MAX_SMEM_QUBITS : remaining_qubits;
-        
+
         if (pass == 0) {
             int chunk_size = 1 << qubits_this_pass;
             int num_chunks = m * (state_len / chunk_size);
             float pass_norm = (remaining_qubits == qubits_this_pass) ? norm_factor : 1.0f;
             int smem_size = chunk_size * sizeof(float);
-            
+
             switch (qubits_this_pass) {
                 case 7: native_fp32_extreme_fwt_kernel<7, 32, 1><<<num_chunks, 32, smem_size, stream>>>(d_A, d_C, pass_norm); break;
                 case 8: native_fp32_extreme_fwt_kernel<8, 64, 1><<<num_chunks, 64, smem_size, stream>>>(d_A, d_C, pass_norm); break;
@@ -841,7 +857,7 @@ void ImplicitHadamardNativeEngine::execute_implicit_hadamard_fp32(
             int rows = 1 << qubits_this_pass;
             int batches = m * (state_len / (rows * cols));
             float pass_norm = (remaining_qubits == qubits_this_pass) ? norm_factor : 1.0f;
-            
+
             if (qubits_this_pass <= 5) {
                 int block_size = 256;
                 int COLS_PER_BLOCK = block_size / rows;
@@ -859,16 +875,16 @@ void ImplicitHadamardNativeEngine::execute_implicit_hadamard_fp32(
                 int SMEM_PITCH = TILE_COLS + 4;
                 int smem_size = rows * SMEM_PITCH * sizeof(float);
                 int block_size = 256;
-                
+
                 cudaFuncSetAttribute(native_fp32_interblock_fwt_v2_kernel<TILE_COLS, 0>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
-                
+
                 dim3 grid(cols / TILE_COLS, batches);
                 native_fp32_interblock_fwt_v2_kernel<TILE_COLS, 0><<<grid, block_size, smem_size, stream>>>(
                     d_C, d_C, current_qubit_offset, qubits_this_pass, pass_norm
                 );
             }
         }
-        
+
         remaining_qubits -= qubits_this_pass;
         current_qubit_offset += qubits_this_pass;
         pass++;
@@ -889,7 +905,7 @@ __global__ void __launch_bounds__(THREADS) native_fp64_extreme_fwt_kernel(
     int tid = threadIdx.x;
     constexpr int CHUNK_LEN = 1 << N;
     constexpr int NUM_B = CHUNK_LEN / THREADS;
-    
+
     // Each block processes one CHUNK_LEN size array
     const double* in_chunk = in_state + chunk_idx * CHUNK_LEN;
     double* out_chunk = out_state + chunk_idx * CHUNK_LEN;
@@ -921,17 +937,17 @@ __global__ void __launch_bounds__(THREADS) native_fp64_extreme_fwt_kernel(
     if (N > 5) {
         extern __shared__ double smem_d[];
         int max_smem_stage = (N < 8) ? N : 8;
-        
+
         // Process in batches of 16 'b's to limit SMEM to 32KB (16 * 256 * 8 bytes)
         for (int b_start = 0; b_start < NUM_B; b_start += 16) {
             int b_count = ((NUM_B - b_start) < 16) ? (NUM_B - b_start) : 16;
-            
+
             #pragma unroll
             for (int i = 0; i < 16; ++i) {
                 if (i < b_count) smem_d[i * THREADS + tid] = reg[b_start + i];
             }
             __syncthreads();
-            
+
             for (int stage = 5; stage < max_smem_stage; ++stage) {
                 int stride = 1 << stage;
                 #pragma unroll
@@ -943,7 +959,7 @@ __global__ void __launch_bounds__(THREADS) native_fp64_extreme_fwt_kernel(
                     }
                 }
                 __syncthreads();
-                
+
                 if (stage < max_smem_stage - 1) {
                     #pragma unroll
                     for (int i = 0; i < 16; ++i) {
@@ -993,34 +1009,34 @@ __global__ void __launch_bounds__(256) native_fp64_interblock_fwt_kernel(
 ) {
     size_t block_size = (size_t)stride << pass_qubits;
     size_t chunk_size = 1ULL << pass_qubits;
-    
-    size_t tile_row_idx = blockIdx.x; 
+
+    size_t tile_row_idx = blockIdx.x;
     size_t tile_col_idx = (size_t)blockIdx.y * TILE_COLS;
-    
+
     size_t global_block_idx = tile_row_idx / (chunk_size >> 1);
     size_t element_in_chunk = tile_row_idx % (chunk_size >> 1);
-    
+
     size_t row_offset = global_block_idx * block_size + element_in_chunk;
-    
+
     extern __shared__ double smem_d[];
-    int SMEM_PITCH = TILE_COLS + 2; 
-    
+    int SMEM_PITCH = TILE_COLS + 2;
+
     int tid = threadIdx.x;
     int r = tid / TILE_COLS;
     int c = tid % TILE_COLS;
-    
+
     size_t global_r = row_offset + r * (chunk_size >> 1);
     size_t global_c = tile_col_idx + c;
-    
+
     if (c < TILE_COLS && global_c < stride) {
         double v0 = in_state[global_r];
         double v1 = in_state[global_r + (chunk_size >> 1)];
-        
+
         smem_d[r * SMEM_PITCH + c] = v0;
         smem_d[(r + 2) * SMEM_PITCH + c] = v1;
     }
     __syncthreads();
-    
+
     if (tid < chunk_size) {
         int my_r = tid;
         for (int stage = 0; stage < pass_qubits; ++stage) {
@@ -1029,7 +1045,7 @@ __global__ void __launch_bounds__(256) native_fp64_interblock_fwt_kernel(
             int offset = my_r % s;
             int i = b * (s << 1) + offset;
             int j = i + s;
-            
+
             #pragma unroll
             for (int cc = 0; cc < TILE_COLS; ++cc) {
                 double a = smem_d[i * SMEM_PITCH + cc];
@@ -1040,16 +1056,16 @@ __global__ void __launch_bounds__(256) native_fp64_interblock_fwt_kernel(
         }
     }
     __syncthreads();
-    
+
     if (c < TILE_COLS && global_c < stride) {
         double v0 = smem_d[r * SMEM_PITCH + c];
         double v1 = smem_d[(r + 2) * SMEM_PITCH + c];
-        
+
         if (norm_factor != 1.0) {
             v0 *= norm_factor;
             v1 *= norm_factor;
         }
-        
+
         out_state[global_r] = v0;
         out_state[global_r + (chunk_size >> 1)] = v1;
     }
@@ -1088,18 +1104,18 @@ void ImplicitHadamardNativeEngine::execute_implicit_hadamard_fp64(
     int remaining_qubits = num_qubits;
     int current_qubit_offset = 0;
     int pass = 0;
-    
+
     // TIER 2: Optimized Multi-Pass (N >= 15)
     while (remaining_qubits > 0) {
         int MAX_SMEM_QUBITS = (pass == 0) ? 14 : 8;
         int qubits_this_pass = (remaining_qubits > MAX_SMEM_QUBITS) ? MAX_SMEM_QUBITS : remaining_qubits;
-        
+
         if (pass == 0) {
             int chunk_size = 1 << qubits_this_pass;
             int num_chunks = m * (state_len / chunk_size);
             double pass_norm = (remaining_qubits == qubits_this_pass) ? norm_factor : 1.0;
             int smem_size = 16 * 256 * sizeof(double); // 32 KB Max
-            
+
             switch (qubits_this_pass) {
                 case 6: native_fp64_extreme_fwt_kernel<6, 64><<<num_chunks, 64, 16 * 64 * (int)sizeof(double), stream>>>(d_A, d_C, pass_norm); break;
                 case 7: native_fp64_extreme_fwt_kernel<7, 128><<<num_chunks, 128, 16 * 128 * (int)sizeof(double), stream>>>(d_A, d_C, pass_norm); break;
@@ -1115,20 +1131,20 @@ void ImplicitHadamardNativeEngine::execute_implicit_hadamard_fp64(
             int stride = 1 << current_qubit_offset;
             int chunk_size = 1 << qubits_this_pass;
             double pass_norm = (remaining_qubits == qubits_this_pass) ? norm_factor : 1.0;
-            
-            const int TILE_COLS = 64; 
+
+            const int TILE_COLS = 64;
             int num_tiles_row = m * (state_len / chunk_size);
             int num_tiles_col = (stride + TILE_COLS - 1) / TILE_COLS;
-            
+
             dim3 grid(num_tiles_row, num_tiles_col);
             int smem_size = chunk_size * (TILE_COLS + 2) * sizeof(double);
-            
+
             const double* in_ptr = (pass == 1) ? d_C : d_C;
             native_fp64_interblock_fwt_kernel<TILE_COLS><<<grid, 256, smem_size, stream>>>(
                 in_ptr, d_C, qubits_this_pass, stride, pass_norm
             );
         }
-        
+
         remaining_qubits -= qubits_this_pass;
         current_qubit_offset += qubits_this_pass;
         pass++;
@@ -1137,5 +1153,3 @@ void ImplicitHadamardNativeEngine::execute_implicit_hadamard_fp64(
 
 } // namespace native
 } // namespace qdp
-
-

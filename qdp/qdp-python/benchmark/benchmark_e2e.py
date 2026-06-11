@@ -483,7 +483,9 @@ def run_mahout_arrow_native(engine, n_qubits, n_samples, encoding_method: str = 
         print("\n[Mahout-Native] Skipping: Native path supports iqp / iqp-z only.")
         return 0.0, None
     if not hasattr(engine, "encode_batch_native"):
-        print("\n[Mahout-Native] encode_batch_native not available in this build, skipping.")
+        print(
+            "\n[Mahout-Native] encode_batch_native not available in this build, skipping."
+        )
         return 0.0, None
 
     clean_cache()

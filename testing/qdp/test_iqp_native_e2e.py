@@ -104,19 +104,21 @@ def test_native_e2e_matches_fwt_and_tc(engine, num_qubits):
     native = torch.from_dlpack(
         engine.encode_batch_native(data, num_qubits, encoding_method)
     ).clone()
-    fwt = torch.from_dlpack(
-        engine.encode(data, num_qubits, encoding_method)
-    ).clone()
+    fwt = torch.from_dlpack(engine.encode(data, num_qubits, encoding_method)).clone()
 
     native_fwt_err = (native - fwt).abs().max().item()
-    assert native_fwt_err < 1e-5, f"Native vs FWT E2E err {native_fwt_err} at N={num_qubits}"
+    assert native_fwt_err < 1e-5, (
+        f"Native vs FWT E2E err {native_fwt_err} at N={num_qubits}"
+    )
 
     if hasattr(engine, "encode_batch_tc"):
         tc = torch.from_dlpack(
             engine.encode_batch_tc(data, num_qubits, encoding_method)
         ).clone()
         native_tc_err = (native - tc).abs().max().item()
-        assert native_tc_err < 1e-5, f"Native vs TC E2E err {native_tc_err} at N={num_qubits}"
+        assert native_tc_err < 1e-5, (
+            f"Native vs TC E2E err {native_tc_err} at N={num_qubits}"
+        )
 
 
 @requires_qdp
