@@ -478,6 +478,59 @@ def run_mahout_arrow_tc(engine, n_qubits, n_samples, encoding_method: str = "iqp
     return total_time, gpu_batched
 
 
+def run_mahout_arrow_native(engine, n_qubits, n_samples, encoding_method: str = "iqp"):
+    if encoding_method not in IQP_ENCODING_METHODS:
+        print("\n[Mahout-Native] Skipping: Native path supports iqp / iqp-z only.")
+        return 0.0, None
+    if not hasattr(engine, "encode_batch_native"):
+        print("\n[Mahout-Native] encode_batch_native not available in this build, skipping.")
+        return 0.0, None
+
+    clean_cache()
+
+    print("\n[Mahout-Native] Full Pipeline (Arrow IPC -> GPU, PR8 Native-FWT path)...")
+    model = DummyQNN(n_qubits).cuda()
+
+    torch.cuda.synchronize()
+    start_time = time.perf_counter()
+
+    io_start = time.perf_counter()
+    params = _load_arrow_params(ARROW_FILE)
+    io_time = time.perf_counter() - io_start
+    print(f"  Arrow read (CPU): {io_time:.4f} s")
+
+    encode_start = time.perf_counter()
+    qtensor = engine.encode_batch_native(params, n_qubits, encoding_method)
+    encode_time = time.perf_counter() - encode_start
+    print(f"  encode_batch_native: {encode_time:.4f} s")
+
+    dlpack_start = time.perf_counter()
+    gpu_batched = torch.from_dlpack(qtensor).clone()
+    dlpack_time = time.perf_counter() - dlpack_start
+    print(f"  DLPack conversion: {dlpack_time:.4f} s")
+
+    state_len = 1 << n_qubits
+    assert gpu_batched.shape == (n_samples, state_len), (
+        f"Expected shape ({n_samples}, {state_len}), got {gpu_batched.shape}"
+    )
+
+    reshape_start = time.perf_counter()
+    gpu_all_data = gpu_batched.abs().to(torch.float32)
+    reshape_time = time.perf_counter() - reshape_start
+    print(f"  Convert to float32: {reshape_time:.4f} s")
+
+    for i in range(0, n_samples, BATCH_SIZE):
+        batch = gpu_all_data[i : i + BATCH_SIZE]
+        _ = model(batch)
+
+    torch.cuda.synchronize()
+    total_time = time.perf_counter() - start_time
+    print(f"  Total Time: {total_time:.4f} s")
+
+    clean_cache()
+    return total_time, gpu_batched
+
+
 def compare_states(name_a, states_a, name_b, states_b) -> None:
     print("\n" + "=" * 70)
     print(f"VERIFICATION ({name_a} vs {name_b})")
@@ -537,6 +590,7 @@ if __name__ == "__main__":
             "mahout-parquet",
             "mahout-arrow",
             "mahout-tc",
+            "mahout-native",
             "pennylane",
             "qiskit",
             "all",
@@ -554,14 +608,14 @@ if __name__ == "__main__":
 
     if args.frameworks is None:
         if args.encoding_method in IQP_ENCODING_METHODS:
-            args.frameworks = ["mahout-arrow", "mahout-tc"]
+            args.frameworks = ["mahout-arrow", "mahout-tc", "mahout-native"]
         else:
             args.frameworks = ["mahout-parquet", "pennylane"]
 
     # Expand "all" option
     if "all" in args.frameworks:
         if args.encoding_method in IQP_ENCODING_METHODS:
-            args.frameworks = ["mahout-arrow", "mahout-tc"]
+            args.frameworks = ["mahout-arrow", "mahout-tc", "mahout-native"]
         else:
             args.frameworks = ["mahout-parquet", "mahout-arrow", "pennylane", "qiskit"]
 
@@ -585,6 +639,7 @@ if __name__ == "__main__":
     t_mahout_parquet, mahout_parquet_all_states = 0.0, None
     t_mahout_arrow, mahout_arrow_all_states = 0.0, None
     t_mahout_tc, mahout_tc_all_states = 0.0, None
+    t_mahout_native, mahout_native_all_states = 0.0, None
     t_qiskit, qiskit_all_states = 0.0, None
 
     skip_competitors = args.encoding_method in IQP_ENCODING_METHODS
@@ -629,6 +684,12 @@ if __name__ == "__main__":
         )
         clean_cache()
 
+    if "mahout-native" in args.frameworks:
+        t_mahout_native, mahout_native_all_states = run_mahout_arrow_native(
+            engine, args.qubits, args.samples, args.encoding_method
+        )
+        clean_cache()
+
     print("\n" + "=" * 70)
     print("E2E LATENCY (Lower is Better)")
     print(f"Samples: {args.samples}, Qubits: {args.qubits}")
@@ -641,6 +702,8 @@ if __name__ == "__main__":
         results.append(("Mahout-Arrow (FWT)", t_mahout_arrow))
     if t_mahout_tc > 0:
         results.append(("Mahout-TC (PR7)", t_mahout_tc))
+    if t_mahout_native > 0:
+        results.append(("Mahout-Native (PR8)", t_mahout_native))
     if t_pl > 0:
         results.append(("PennyLane", t_pl))
     if t_qiskit > 0:
@@ -653,7 +716,11 @@ if __name__ == "__main__":
 
     print("-" * 70)
     # Use fastest Mahout variant for speedup comparison
-    mahout_times = [t for t in [t_mahout_arrow, t_mahout_tc, t_mahout_parquet] if t > 0]
+    mahout_times = [
+        t
+        for t in [t_mahout_arrow, t_mahout_tc, t_mahout_native, t_mahout_parquet]
+        if t > 0
+    ]
     t_mahout_best = min(mahout_times) if mahout_times else 0
     if t_mahout_best > 0:
         if t_pl > 0:
@@ -667,6 +734,7 @@ if __name__ == "__main__":
             "Mahout-Parquet": mahout_parquet_all_states,
             "Mahout-Arrow (FWT)": mahout_arrow_all_states,
             "Mahout-TC (PR7)": mahout_tc_all_states,
+            "Mahout-Native (PR8)": mahout_native_all_states,
             "PennyLane": pl_all_states,
             "Qiskit": qiskit_all_states,
         }

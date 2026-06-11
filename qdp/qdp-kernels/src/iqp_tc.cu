@@ -20,6 +20,7 @@
 #include <iostream>
 #include "kernel_config.h"
 #include "ImplicitHadamardOzaki.h"
+#include "ImplicitHadamardNative.h"
 
 // Phase 計算副程式 (從 iqp.cu 中借用)
 __device__ double compute_phase_tc(
@@ -290,4 +291,184 @@ extern "C" int launch_iqp_encode_tc(
     }
 
     return (int)cudaGetLastError();
+}
+
+static int iqp_native_run_kronecker_fp64(
+    const double* data_batch_d,
+    cuDoubleComplex* state_batch_d,
+    size_t num_samples,
+    size_t state_len,
+    unsigned int num_qubits,
+    unsigned int data_len,
+    int enable_zz,
+    cudaStream_t stream
+) {
+    size_t m_samples = num_samples;
+    size_t total_elements = m_samples * state_len;
+
+    int n1 = num_qubits / 2;
+    int n2 = num_qubits - n1;
+    int dim1 = 1 << n1;
+    int dim2 = 1 << n2;
+
+    static double *d_state_real = nullptr, *d_state_imag = nullptr;
+    static double *d_out_real = nullptr, *d_out_imag = nullptr;
+    static double *d_temp_real = nullptr, *d_temp_imag = nullptr;
+    static size_t allocated_elements = 0;
+
+    auto free_buffers = [&]() {
+        if (d_state_real) {
+            cudaFree(d_state_real); cudaFree(d_state_imag);
+            cudaFree(d_out_real);   cudaFree(d_out_imag);
+            cudaFree(d_temp_real);  cudaFree(d_temp_imag);
+            d_state_real = nullptr;
+            allocated_elements = 0;
+        }
+    };
+
+    if (total_elements > allocated_elements) {
+        free_buffers();
+        cudaError_t err;
+        err = cudaMalloc(&d_state_real, total_elements * sizeof(double));
+        if (err != cudaSuccess) return (int)err;
+        err = cudaMalloc(&d_state_imag, total_elements * sizeof(double));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_out_real, total_elements * sizeof(double));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_out_imag, total_elements * sizeof(double));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_temp_real, total_elements * sizeof(double));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        err = cudaMalloc(&d_temp_imag, total_elements * sizeof(double));
+        if (err != cudaSuccess) { free_buffers(); return (int)err; }
+        allocated_elements = total_elements;
+    }
+
+    const size_t buf_bytes = total_elements * sizeof(double);
+    cudaError_t err;
+    err = cudaMemsetAsync(d_temp_real, 0, buf_bytes, stream);
+    if (err != cudaSuccess) return (int)err;
+    err = cudaMemsetAsync(d_temp_imag, 0, buf_bytes, stream);
+    if (err != cudaSuccess) return (int)err;
+    err = cudaMemsetAsync(d_out_real, 0, buf_bytes, stream);
+    if (err != cudaSuccess) return (int)err;
+    err = cudaMemsetAsync(d_out_imag, 0, buf_bytes, stream);
+    if (err != cudaSuccess) return (int)err;
+
+    const size_t blocks = (total_elements + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE;
+    iqp_phase_split_kernel<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
+        data_batch_d, d_state_real, d_state_imag, num_samples, state_len, num_qubits, data_len, enable_zz
+    );
+    err = cudaGetLastError();
+    if (err != cudaSuccess) return (int)err;
+
+    qdp::native::ImplicitHadamardNativeEngine engine;
+    double norm_factor = 1.0 / (double)state_len;
+
+    // Native engine does not fuse batch transpose yet; use explicit 4-step Kronecker.
+    engine.execute_implicit_hadamard_fp64(
+        d_state_real, d_temp_real, num_samples * dim1, dim2, dim2, 1.0, stream, false, 0
+    );
+    engine.execute_implicit_hadamard_fp64(
+        d_state_imag, d_temp_imag, num_samples * dim1, dim2, dim2, 1.0, stream, false, 0
+    );
+    iqp_tc_launch_transpose(d_temp_real, d_out_real, (int)m_samples, dim1, dim2, stream);
+    iqp_tc_launch_transpose(d_temp_imag, d_out_imag, (int)m_samples, dim1, dim2, stream);
+
+    engine.execute_implicit_hadamard_fp64(
+        d_out_real, d_temp_real, num_samples * dim2, dim1, dim1, norm_factor, stream, false, 0
+    );
+    engine.execute_implicit_hadamard_fp64(
+        d_out_imag, d_temp_imag, num_samples * dim2, dim1, dim1, norm_factor, stream, false, 0
+    );
+    iqp_tc_launch_transpose(d_temp_real, d_out_real, (int)m_samples, dim2, dim1, stream);
+    iqp_tc_launch_transpose(d_temp_imag, d_out_imag, (int)m_samples, dim2, dim1, stream);
+
+    recombine_complex_kernel<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
+        d_out_real, d_out_imag, state_batch_d, total_elements
+    );
+    err = cudaGetLastError();
+    if (err != cudaSuccess) return (int)err;
+
+    err = cudaStreamSynchronize(stream);
+    return (int)err;
+}
+
+extern "C" int launch_iqp_encode_native(
+    const double* data_batch_d,
+    void*         state_batch_d,
+    size_t        num_samples,
+    size_t        state_len,
+    unsigned int  num_qubits,
+    int           enable_zz,
+    cudaStream_t  stream
+) {
+    unsigned int data_len = enable_zz
+        ? (unsigned int)(num_qubits + (unsigned int)num_qubits * (num_qubits - 1) / 2)
+        : num_qubits;
+
+    if (num_qubits <= 12) {
+        size_t total_elements = num_samples * state_len;
+        static double *d_state_real = nullptr, *d_state_imag = nullptr;
+        static double *d_out_real = nullptr, *d_out_imag = nullptr;
+        static size_t allocated_elements = 0;
+
+        auto free_buffers = [&]() {
+            if (d_state_real) {
+                cudaFree(d_state_real); cudaFree(d_state_imag);
+                cudaFree(d_out_real);   cudaFree(d_out_imag);
+                d_state_real = nullptr;
+                allocated_elements = 0;
+            }
+        };
+
+        if (total_elements > allocated_elements) {
+            free_buffers();
+            cudaError_t err;
+            err = cudaMalloc(&d_state_real, total_elements * sizeof(double));
+            if (err != cudaSuccess) return (int)err;
+            err = cudaMalloc(&d_state_imag, total_elements * sizeof(double));
+            if (err != cudaSuccess) { free_buffers(); return (int)err; }
+            err = cudaMalloc(&d_out_real, total_elements * sizeof(double));
+            if (err != cudaSuccess) { free_buffers(); return (int)err; }
+            err = cudaMalloc(&d_out_imag, total_elements * sizeof(double));
+            if (err != cudaSuccess) { free_buffers(); return (int)err; }
+            allocated_elements = total_elements;
+        }
+
+        const size_t blocks = (total_elements + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE;
+        iqp_phase_split_kernel<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
+            data_batch_d, d_state_real, d_state_imag, num_samples, state_len, num_qubits, data_len, enable_zz
+        );
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return (int)err;
+
+        qdp::native::ImplicitHadamardNativeEngine engine;
+        double norm_factor = 1.0 / (double)state_len;
+        engine.execute_implicit_hadamard_fp64(
+            d_state_real, d_out_real, num_samples, state_len, state_len, norm_factor, stream, false, 0
+        );
+        engine.execute_implicit_hadamard_fp64(
+            d_state_imag, d_out_imag, num_samples, state_len, state_len, norm_factor, stream, false, 0
+        );
+
+        recombine_complex_kernel<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
+            d_out_real, d_out_imag, static_cast<cuDoubleComplex*>(state_batch_d), total_elements
+        );
+        err = cudaGetLastError();
+        if (err != cudaSuccess) return (int)err;
+        err = cudaStreamSynchronize(stream);
+        return (int)err;
+    }
+
+    return iqp_native_run_kronecker_fp64(
+        data_batch_d,
+        static_cast<cuDoubleComplex*>(state_batch_d),
+        num_samples,
+        state_len,
+        num_qubits,
+        data_len,
+        enable_zz,
+        stream
+    );
 }

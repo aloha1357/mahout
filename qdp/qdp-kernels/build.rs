@@ -165,6 +165,8 @@ fn main() {
     println!("cargo:rerun-if-changed=src/validation.cu");
     println!("cargo:rerun-if-changed=src/iqp.cu");
     println!("cargo:rerun-if-changed=src/iqp_tc.cu");
+    println!("cargo:rerun-if-changed=src/ImplicitHadamardNative.cu");
+    println!("cargo:rerun-if-changed=src/ImplicitHadamardNative.h");
     println!("cargo:rerun-if-changed=src/phase.cu");
     println!("cargo:rerun-if-env-changed=QDP_NO_CUDA");
     println!("cargo:rerun-if-env-changed=QDP_CUDA_ARCH_LIST");
@@ -227,6 +229,7 @@ fn main() {
         .file("src/iqp.cu")
         .file("src/iqp_tc.cu")
         .file("src/ImplicitHadamardOzaki.cu")
+        .file("src/ImplicitHadamardNative.cu")
         .file("src/AdaptiveOzaki.cu") // hook up general AdaptiveOzakiEngine for non-Hadamard graded-ring TC GEMM
         .file("src/phase.cu")
         .compile("kernels");
