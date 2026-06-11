@@ -20,17 +20,11 @@
 from __future__ import annotations
 
 import argparse
-import os
-import sys
-from pathlib import Path
 
 import numpy as np
 import torch
-
-ROOT = Path(os.environ.get("MAHOUT_ROOT", Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(ROOT / "qdp" / "qdp-python" / "benchmark"))
-
 from qumat_qdp import QdpEngine
+
 from utils import generate_batch_data
 
 

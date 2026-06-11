@@ -4,7 +4,7 @@
 
 Fuses PR8's `native_fp64_extreme_fwt` into production IQP encode paths (not PR7 TC butterfly). Delivers fused IQP for N≤12, fused-transpose Kronecker for N>12 (fp64 + fp32), and FP32 QML via the same `encode_batch_native` API.
 
-**Branch:** `pr9-native-fused-iqp` · **Tip:** `c8fa9a1fa` · **Base:** PR8 `840f016f8`
+**Branch:** `pr9-native-fused-iqp` · **Tip:** `c8fa9a1fa` (PR9d) · **Base:** PR8 `840f016f8`
 
 | Sub-PR | Change | N |
 |--------|--------|---|
@@ -15,15 +15,15 @@ Fuses PR8's `native_fp64_extreme_fwt` into production IQP encode paths (not PR7 
 
 ## Benchmark highlights (RTX 4060 Laptop · WSL2 · 2026-06-11)
 
-### fp64 E2E (`bench_pr9_ab.sh`, 32 samples, iqp-z)
+### fp64 E2E (`benchmark_e2e.py`, 32 samples, iqp-z)
 
 | N | Native E2E | vs TC (PR7) | vs PR8 E2E |
 |---|------------|-------------|------------|
-| 12 | 8.7 ms | **4.7×** | **1.43×** |
-| 14 | 15.9 ms | **3.8×** | **2.30×** |
-| 16 | 19.7 ms | **4.3×** | **1.15×** |
+| 12 | 8.7 ms | **4.7×** | ~1.0× (encode wins) |
+| 14 | 15.9 ms | **3.8×** | **1.25×** |
+| 16 | 19.7 ms | **4.3×** | ~1.0× |
 
-### fp32 GPU encode (`scripts/benchmark_iqp_native.py`, 32 samples)
+### fp32 GPU encode (CUDA events on `encode_batch_native`, 32 samples)
 
 | N | fp32 (PR9d) | fp64 (PR9d) | fp32/fp64 |
 |---|-------------|-------------|-----------|
@@ -54,13 +54,21 @@ pytest testing/qdp/test_iqp_native_fp32.py -v
 
 ```bash
 export PATH="/usr/local/cuda/bin:$HOME/.cargo/bin:$PATH"
-source .venv_wsl/bin/activate
+source .venv_wsl/bin/activate   # or project venv
 cd qdp/qdp-python && maturin develop --release && cd ../..
 
-bash scripts/bench_pr9_ab.sh PR9d
-python scripts/benchmark_iqp_native.py --label PR9d
-bash scripts/ncu_pr9_compare.sh 840f016f8 HEAD
+pytest testing/qdp/test_iqp_native_path.py testing/qdp/test_iqp_tc_path.py -v
+pytest testing/qdp/test_iqp_native_e2e.py -v -m "not slow"
+pytest testing/qdp/test_iqp_native_fp32.py -v
+
+for N in 12 14 16; do
+  python qdp/qdp-python/benchmark/benchmark_e2e.py \
+    --qubits $N --samples 32 --encoding-method iqp-z \
+    --frameworks mahout-arrow mahout-tc mahout-native
+done
 ```
+
+NCU comparison (optional, local): profile `encode_batch_native` @ N=14/16 with NCU; artifacts under `qdp/qdp-kernels/reports/pr9_ncu/` (untracked). See `reports/PR009_NCU.md`.
 
 ## Stack
 

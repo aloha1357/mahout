@@ -9,6 +9,10 @@ scripts:
   that measures vectors/sec across Mahout, PennyLane, and Qiskit.
 - `benchmark_latency.py`: Data-to-State latency benchmark (CPU RAM -> GPU VRAM).
 - `benchmark_phase.py`: GPU phase encoding latency benchmark (batch encode timing).
+- `benchmark_iqp_native.py`: GPU `encode_batch_native` timing for IQP (fp32/fp64).
+- `benchmark_pr9_suite.py`: PR9 full suite (E2E + encode timing + fast pytest).
+- `ncu_profile_native_encode.py`: minimal encode loop for NCU/Nsight profiling.
+- `ncu_pr9_compare.py`: PR8 vs PR9 NCU/nsys comparison (optional, local GPU).
 
 ## Quick Start
 
@@ -34,9 +38,20 @@ uv run --project qdp/qdp-python python qdp/qdp-python/benchmark/benchmark_e2e.py
 uv run --project qdp/qdp-python python qdp/qdp-python/benchmark/benchmark_latency.py
 uv run --project qdp/qdp-python python qdp/qdp-python/benchmark/benchmark_throughput.py
 uv run --project qdp/qdp-python python qdp/qdp-python/benchmark/benchmark_phase.py
+uv run --project qdp/qdp-python python qdp/qdp-python/benchmark/benchmark_pr9_suite.py --label PR9d
 ```
 
 This keeps all benchmark dependencies in the unified repo root venv (`mahout/.venv`).
+
+## PR9 native IQP suite
+
+From `qdp/qdp-python/benchmark` after `maturin develop --release`:
+
+```bash
+python benchmark_pr9_suite.py --label PR9d
+python benchmark_iqp_native.py --label PR9d
+python ncu_pr9_compare.py 840f016f8 HEAD   # optional; requires nsys/ncu on PATH
+```
 
 ## Manual Setup
 

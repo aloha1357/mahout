@@ -1,17 +1,11 @@
 # PR009 NCU / nsys — PR8 vs PR9 Native Encode
 
 **Hardware:** RTX 4060 Laptop (CC 8.9) · WSL2
-**Workload:** `scripts/ncu_profile_native_encode.py` — 32 samples, iqp-z, fp64
+**Profiler:** NCU 2024.3.2 · nsys 2024.5.1
+**Workload:** `encode_batch_native` — 32 samples, iqp-z, fp64
+**Compared:** PR8 `840f016f8` vs PR9 `c8fa9a1fa` (PR9d; fp64 path unchanged since PR9b)
 
-## Reproduce
-
-```bash
-export PATH="/usr/local/cuda/bin:$HOME/.cargo/bin:$PATH"
-source .venv_wsl/bin/activate
-bash scripts/ncu_pr9_compare.sh 840f016f8 HEAD
-```
-
-Artifacts: `qdp/qdp-kernels/reports/pr9_ncu/` (local, untracked)
+**Raw artifacts** (local, not in git): `qdp/qdp-kernels/reports/pr9_ncu/`
 
 ## NCU @ N=14 (fp64)
 
@@ -28,3 +22,14 @@ Artifacts: `qdp/qdp-kernels/reports/pr9_ncu/` (local, untracked)
 |---|-----|----------|-----------------|
 | ≤12 | phase_split + 2× FWT | 1× fused IQP | 1× fused IQP |
 | >12 | 4× FWT + 4× transpose | 4× FWT + fused scatter | 4× scalar FWT + fused scatter |
+
+NCU @ N=14 confirms **transpose elimination** on the fp64 Kronecker path.
+
+## PR9d note (FP32 Kronecker)
+
+PR9d replaces PR9c's explicit `iqp_tc_batch_transpose_kernel_f32` with scalar fused-transpose scatter (correct vs fp64). **NCU fp32 sweep pending** — see `reports/PR009_N_Test_Matrix.md`.
+
+## Related
+
+- E2E benchmark: `reports/PR009_Benchmark.md`
+- N coverage: `reports/PR009_N_Test_Matrix.md`

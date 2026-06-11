@@ -13,7 +13,7 @@
 | PR9c | `native_fp32_extreme_iqp_fused_kernel` | fp32 6–12 |
 | PR9d | FP32 scalar fused-transpose Kronecker | fp32 >12 |
 
-**fp64:** E2E **1.15–2.30×** vs PR8 @ N=12/14/16; **3.8–4.7×** vs PR7 TC.
+**fp64:** E2E **~1.0–1.25×** vs PR8 @ N=12/14/16; **3.8–4.7×** vs PR7 TC.
 **fp32:** Encode **1.7–2.5×** faster than fp64; Kronecker vs fp64 **<1e-4**.
 
 ## Unit tests
@@ -35,7 +35,7 @@ pytest testing/qdp/test_iqp_native_fp32.py -v
 | `test_iqp_native_e2e.py` fast (6) | PASS |
 | `test_iqp_native_fp32.py` (4) | PASS (~46 s) |
 
-## fp64 E2E (`scripts/bench_pr9_ab.sh`)
+## fp64 E2E (`qdp/qdp-python/benchmark/benchmark_e2e.py`)
 
 Config: `iqp-z`, 32 samples, `mahout-arrow mahout-tc mahout-native`
 
@@ -55,7 +55,7 @@ Verification vs FWT/TC: amplitude diff **<1e-8** @ N=12/14/16.
 | 14 | 0.0198 | **0.0159** | **1.25×** |
 | 16 | 0.0197 | 0.0197 | ~1.0× |
 
-## fp32/fp64 encode (`scripts/benchmark_iqp_native.py`)
+## fp32/fp64 encode (CUDA events on `encode_batch_native`)
 
 32 samples, 30 rounds, 5 warmup, CUDA events.
 
@@ -78,13 +78,16 @@ Verification vs FWT/TC: amplitude diff **<1e-8** @ N=12/14/16.
 
 ```bash
 export PATH="/usr/local/cuda/bin:$HOME/.cargo/bin:$PATH"
-export MAHOUT_ROOT="$(pwd)"
 source .venv_wsl/bin/activate
 cd qdp/qdp-python && maturin develop --release && cd ../..
 
-bash scripts/bench_pr9_ab.sh PR9d
-python scripts/benchmark_iqp_native.py --label PR9d
 pytest testing/qdp/test_iqp_native_fp32.py -v
+
+for N in 12 14 16; do
+  python qdp/qdp-python/benchmark/benchmark_e2e.py \
+    --qubits $N --samples 32 --encoding-method iqp-z \
+    --frameworks mahout-arrow mahout-tc mahout-native
+done
 ```
 
 ## Related

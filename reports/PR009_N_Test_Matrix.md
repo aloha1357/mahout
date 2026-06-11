@@ -41,8 +41,23 @@
 ## Reproduce
 
 ```bash
+export PATH="/usr/local/cuda/bin:$PATH"
 source .venv_wsl/bin/activate
+cd qdp/qdp-python && maturin develop --release && cd ../..
+
 pytest testing/qdp/test_iqp_native_fp32.py -v
-python scripts/benchmark_iqp_native.py --label PR9d
-bash scripts/bench_pr9_ab.sh PR9d
+
+for N in 12 14 16; do
+  python qdp/qdp-python/benchmark/benchmark_e2e.py \
+    --qubits $N --samples 32 --encoding-method iqp-z \
+    --frameworks mahout-native
+done
 ```
+
+## Related
+
+| Doc | Content |
+|-----|---------|
+| `reports/PR009_Benchmark.md` | E2E + encode timings |
+| `reports/PR009_NCU.md` | NCU PR8 vs PR9 |
+| `reports/PR008_Benchmark.md` | PR8 baseline |
