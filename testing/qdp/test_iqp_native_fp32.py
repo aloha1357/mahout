@@ -55,7 +55,9 @@ def engine_f64():
 @pytest.mark.gpu
 @pytest.mark.parametrize("num_qubits", [8, 12])
 @pytest.mark.parametrize("encoding_method", ["iqp-z"])
-def test_native_fp32_matches_fp64_fused(engine_f32, engine_f64, num_qubits, encoding_method):
+def test_native_fp32_matches_fp64_fused(
+    engine_f32, engine_f64, num_qubits, encoding_method
+):
     batch_size = 16
     data_len = _iqp_param_count(num_qubits, encoding_method)
     data_f32 = torch.randn(batch_size, data_len, dtype=torch.float32).numpy()
@@ -71,7 +73,9 @@ def test_native_fp32_matches_fp64_fused(engine_f32, engine_f64, num_qubits, enco
     assert out_f32.shape == (batch_size, 1 << num_qubits)
     assert torch.isfinite(out_f32).all()
 
-    err = (out_f32.to(torch.complex128) - out_f64.to(torch.complex128)).abs().max().item()
+    err = (
+        (out_f32.to(torch.complex128) - out_f64.to(torch.complex128)).abs().max().item()
+    )
     assert err < 1e-4, f"FP32 vs FP64 native err {err} at N={num_qubits}"
 
 
@@ -94,5 +98,7 @@ def test_native_fp32_kronecker_matches_fp64(engine_f32, engine_f64, num_qubits):
     assert out_f32.shape == (batch_size, 1 << num_qubits)
     assert torch.isfinite(out_f32).all()
 
-    err = (out_f32.to(torch.complex128) - out_f64.to(torch.complex128)).abs().max().item()
+    err = (
+        (out_f32.to(torch.complex128) - out_f64.to(torch.complex128)).abs().max().item()
+    )
     assert err < 1e-4, f"FP32 vs FP64 Kronecker err {err} at N={num_qubits}"

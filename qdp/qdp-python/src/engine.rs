@@ -175,9 +175,9 @@ impl QdpEngine {
             let shape = array_2d.shape();
             let num_samples = shape[0];
             let sample_size = shape[1];
-            let data_slice = array_2d.as_slice().map_err(|_| {
-                PyRuntimeError::new_err("NumPy array must be contiguous (C-order)")
-            })?;
+            let data_slice = array_2d
+                .as_slice()
+                .map_err(|_| PyRuntimeError::new_err("NumPy array must be contiguous (C-order)"))?;
             let ptr = self
                 .engine
                 .encode_batch_native(

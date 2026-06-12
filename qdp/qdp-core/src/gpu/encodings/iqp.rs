@@ -304,7 +304,12 @@ impl IqpEncoder {
         let data_gpu = {
             crate::profile_scope!("GPU::H2D_BatchIqpDataNativeF32");
             device.htod_sync_copy(batch_data).map_err(|e| {
-                map_allocation_error(input_bytes, "IQP Native F32 batch upload", Some(num_qubits), e)
+                map_allocation_error(
+                    input_bytes,
+                    "IQP Native F32 batch upload",
+                    Some(num_qubits),
+                    e,
+                )
             })?
         };
 
