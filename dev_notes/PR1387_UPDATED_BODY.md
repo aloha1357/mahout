@@ -75,7 +75,7 @@ This PR is a correctness/remediation PR, not a speedup PR. The benchmark below i
 **Workload:** IQP full-ZZ, deterministic seed `42`, WSL/CUDA local environment  
 **Metric:** median direct encode latency, 10 timed iterations after warmup
 
-![PR1387 TC benchmark](https://raw.githubusercontent.com/aloha1357/apache_mout/internal-dev-notes/dev_notes/pr1387_benchmark/pr1387_tc_benchmark.png)
+![PR1387 TC benchmark](https://raw.githubusercontent.com/aloha1357/mahout/internal-dev-notes/dev_notes/pr1387_benchmark/pr1387_tc_benchmark.png)
 
 | N | batch | FWT median ms | TC median ms | TC speedup | max abs err vs FWT | TC norm max err |
 |---:|---:|---:|---:|---:|---:|---:|
