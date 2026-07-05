@@ -67,27 +67,6 @@ This PR does **not** introduce the later Native/Fused FP32 Hadamard work. That w
 | Tensor Core `encode_batch_tc` path | remediated and directly tested |
 | Native/Fused FP32-FP64 path | separate future PR |
 
-## Benchmark characterization
-
-This PR is a correctness/remediation PR, not a speedup PR. The benchmark below is included to characterize the remediated `encode_batch_tc` path against the default FWT encode path on the pushed remediation commit.
-
-**Commit:** `6497bbbe7`  
-**Workload:** IQP full-ZZ, deterministic seed `42`, WSL/CUDA local environment  
-**Metric:** median direct encode latency, 10 timed iterations after warmup
-
-![PR1387 TC benchmark](https://raw.githubusercontent.com/aloha1357/mahout/internal-dev-notes/dev_notes/pr1387_benchmark/pr1387_tc_benchmark.png)
-
-| N | batch | FWT median ms | TC median ms | TC speedup | max abs err vs FWT | TC norm max err |
-|---:|---:|---:|---:|---:|---:|---:|
-| 8 | 8 | 1.109 | 1.088 | 1.02x | 0.000e+00 | 1.110e-16 |
-| 10 | 8 | 1.106 | 1.102 | 1.00x | 0.000e+00 | 1.110e-16 |
-| 12 | 8 | 1.713 | 1.265 | 1.35x | 0.000e+00 | 0.000e+00 |
-| 14 | 8 | 1.967 | 2.134 | 0.92x | 1.185e-09 | 7.914e-10 |
-| 16 | 8 | 5.570 | 17.097 | 0.33x | 3.142e-17 | 1.110e-16 |
-| 18 | 4 | 13.838 | 62.159 | 0.22x | 2.296e-17 | 0.000e+00 |
-
-The current direct TC encode path is numerically consistent with the default FWT path on these measured cases. Larger-N direct encode is not presented as a latency win in this PR; Native/Fused work is planned as a separate performance PR.
-
 ## Validation
 
 Validated locally in the repository WSL environment:

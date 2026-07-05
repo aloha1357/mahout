@@ -5,6 +5,12 @@
 **Current PR #1387 tip:** `6497bbbe7` (`fix(qdp): complete TC path reviewer remediation`)  
 **Purpose:** plan a new, independent PR for Native/Fused IQP work.
 
+Related spec:
+
+- `dev_notes/TC_PERFORMANCE_SPEC_2026_07_02.md` defines what the current TC
+  path is actually faster at, which benchmark categories must stay separate,
+  and what evidence is required before making new performance claims.
+
 ---
 
 ## Decision
@@ -239,4 +245,3 @@ Validation section should list exact commands and results.
 6. Run full validation gate.
 7. Push to `mahout_fork/qdp-native-fused-iqp`.
 8. Open a new upstream PR, not a continuation of #1387.
-
