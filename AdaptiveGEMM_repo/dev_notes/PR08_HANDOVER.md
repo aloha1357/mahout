@@ -1,8 +1,8 @@
 # PR8 Handover — Native FWT A/B (beats PR7 E2E)
 
-**Date:** 2026-06-11  
-**Code branch:** `pr8-native-hadamard-benchmark` (base: PR7 `ac7883296`)  
-**Tip commit:** `840f016f8`  
+**Date:** 2026-06-11
+**Code branch:** `pr8-native-hadamard-benchmark` (base: PR7 `ac7883296`)
+**Tip commit:** `840f016f8`
 **Environment:** WSL2 Ubuntu, RTX 4060 Laptop, `.venv_wsl`
 
 ---

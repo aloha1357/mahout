@@ -124,26 +124,26 @@ extern "C" int launch_iqp_encode_tc(
 ) {
     // Scaffold for batch layout manipulation
     size_t total_elements = num_samples * state_len;
-    
+
     double *d_state_real, *d_state_imag;
     cudaMalloc(&d_state_real, total_elements * sizeof(double));
     cudaMalloc(&d_state_imag, total_elements * sizeof(double));
-    
+
     unsigned int data_len = num_qubits;
     const size_t blocks = (total_elements + DEFAULT_BLOCK_SIZE - 1) / DEFAULT_BLOCK_SIZE;
-    
+
     iqp_phase_split_kernel<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
         data_batch_d, d_state_real, d_state_imag, num_samples, state_len, num_qubits, data_len, enable_zz
     );
-    
+
     // In future PRs, Kronecker Transpose and FWT will happen here.
-    
+
     recombine_complex_kernel<<<blocks, DEFAULT_BLOCK_SIZE, 0, stream>>>(
         d_state_real, d_state_imag, static_cast<cuDoubleComplex*>(state_batch_d), total_elements
     );
-    
+
     cudaFree(d_state_real);
     cudaFree(d_state_imag);
-    
+
     return (int)cudaSuccess;
 }

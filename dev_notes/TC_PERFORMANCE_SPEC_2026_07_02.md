@@ -1,7 +1,7 @@
 # Tensor Core IQP Performance Spec
 
-**Date:** 2026-07-02  
-**Branch context:** `internal-dev-notes` after PR #1387 remediation push  
+**Date:** 2026-07-02
+**Branch context:** `internal-dev-notes` after PR #1387 remediation push
 **Purpose:** define where the current Tensor Core IQP path is actually faster,
 what remains unverified on the current stack, and what work must be completed
 before making new performance claims.

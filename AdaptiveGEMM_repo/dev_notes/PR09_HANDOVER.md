@@ -1,8 +1,8 @@
 # PR9 Handover — Fused Native IQP
 
-**Date:** 2026-06-11  
-**Code branch:** `pr9-native-fused-iqp` (base: PR8 `840f016f8`)  
-**Tip commit:** `29a84d0d7` (PR9a + PR9b)  
+**Date:** 2026-06-11
+**Code branch:** `pr9-native-fused-iqp` (base: PR8 `840f016f8`)
+**Tip commit:** `29a84d0d7` (PR9a + PR9b)
 **Environment:** WSL2 Ubuntu, RTX 4060 Laptop, `.venv_wsl`
 
 ---
@@ -23,7 +23,7 @@
 
 ### PR9a (N = 6..12)
 
-Fuses Phase + `native_fp64_extreme_fwt_transform` (real/imag) + norm in **one kernel per sample**.  
+Fuses Phase + `native_fp64_extreme_fwt_transform` (real/imag) + norm in **one kernel per sample**.
 **Not** the PR7 TC naive SMEM butterfly.
 
 ### PR9b (N > 12)
@@ -41,7 +41,7 @@ Removed PR8's 4× `iqp_tc_launch_transpose` calls.
 
 ## Measurements (2026-06-11, tip `29a84d0d7`)
 
-**Config:** `benchmark_e2e.py`, `iqp-z`, 32 samples, RTX 4060 Laptop WSL2  
+**Config:** `benchmark_e2e.py`, `iqp-z`, 32 samples, RTX 4060 Laptop WSL2
 **Script:** `scripts/bench_pr9_ab.sh`
 
 ### E2E total time

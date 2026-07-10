@@ -15,7 +15,7 @@ N/A
 
 ### Why
 
-As part of the IQP Encoding Optimization PR Split Plan, PR 2 focuses on "Batch throughput optimization" and lays the structural groundwork for Tensor Core (TC) acceleration (which will be fully introduced in PR 5 & 6). 
+As part of the IQP Encoding Optimization PR Split Plan, PR 2 focuses on "Batch throughput optimization" and lays the structural groundwork for Tensor Core (TC) acceleration (which will be fully introduced in PR 5 & 6).
 
 **Architectural Philosophy: Dual-Path Explicit Opt-in**
 It is crucial to note that these new Tensor Core optimizations do *not* automatically replace or override the existing standard algorithms. We are adopting a **Dual-Path Architecture**:

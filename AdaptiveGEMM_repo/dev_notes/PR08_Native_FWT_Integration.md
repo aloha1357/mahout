@@ -94,5 +94,5 @@ Full tables: [`reports/PR008_Benchmark.md`](https://github.com/aloha1357/apache_
 
 ## Stack
 
-**Base:** `mahout_fork/pr7-iqp-tc-ncu-profiling` (`ac7883296`)  
+**Base:** `mahout_fork/pr7-iqp-tc-ncu-profiling` (`ac7883296`)
 **Head:** `mahout_fork/pr8-native-hadamard-benchmark` (`840f016f8`)

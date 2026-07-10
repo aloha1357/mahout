@@ -1,8 +1,8 @@
 # PR8 / PR9 Plan — Native Hadamard vs PR7 Ozaki-TC
 
-**Date:** 2026-06-11 (updated after PR8 benchmark)  
-**PR7 baseline:** `ac7883296`  
-**PR8 tip:** `d3bcf7d37` on `pr8-native-hadamard-benchmark` (pushed to `mahout_fork`)  
+**Date:** 2026-06-11 (updated after PR8 benchmark)
+**PR7 baseline:** `ac7883296`
+**PR8 tip:** `d3bcf7d37` on `pr8-native-hadamard-benchmark` (pushed to `mahout_fork`)
 **PR9 plan:** see `PR09_Fused_Native_Plan.md`
 
 ---
@@ -72,7 +72,7 @@ Optimized for **QML / speed** when FP64 stability is not required. FP64 native p
 
 ## PR8 — Native wiring + benchmark (no default switch)
 
-**Branch:** `pr8-native-hadamard-benchmark` (base: PR7 tip)  
+**Branch:** `pr8-native-hadamard-benchmark` (base: PR7 tip)
 **Merge criterion:** build green + benchmark report with go/no-go per N; **no** change to default `encode_batch_tc` behavior.
 
 ### 8.1 Build integration
@@ -125,8 +125,8 @@ Add pytest: `test_iqp_native_path.py` mirroring `test_iqp_tc_path.py` for N=8,12
 | 16 | PR7 Kronecker (256² naive FP64) vs Native FP64 multi-pass |
 | 18 | PR7 naive legs vs Native FP64 3-pass |
 
-**Success (proceed to PR9):** Native path ≥ **1.1× E2E speedup** vs PR7 at any target N **and** verification PASS.  
-**Partial success:** Native wins encode-only Hadamard leg ≥ **1.5×** @ N≥14 → PR9 focuses on fusion + less GM traffic.  
+**Success (proceed to PR9):** Native path ≥ **1.1× E2E speedup** vs PR7 at any target N **and** verification PASS.
+**Partial success:** Native wins encode-only Hadamard leg ≥ **1.5×** @ N≥14 → PR9 focuses on fusion + less GM traffic.
 **No-go:** Native slower or FP32 fails verify → keep PR7; archive native as QML-only opt-in.
 
 ### 8.6 Deliverables
@@ -141,7 +141,7 @@ Add pytest: `test_iqp_native_path.py` mirroring `test_iqp_tc_path.py` for N=8,12
 
 ## PR9 — Full fused native kernel (conditional on PR8)
 
-**Branch:** `pr9-native-fused-iqp` (base: PR8)  
+**Branch:** `pr9-native-fused-iqp` (base: PR8)
 **Only if PR8 shows a credible path to beat PR7 E2E or Hadamard-leg bottleneck.**
 
 ### 9.1 Fused kernel (N ≤ 15)

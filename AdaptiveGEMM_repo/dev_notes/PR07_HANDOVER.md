@@ -1,7 +1,7 @@
 # PR7 Handover ??E2E TC Integration (N>12 Correctness Complete)
 
-**Date:** 2026-06-11  
-**Code branch:** `pr7-iqp-tc-ncu-profiling` (base: PR6 `543586ac1`)  
+**Date:** 2026-06-11
+**Code branch:** `pr7-iqp-tc-ncu-profiling` (base: PR6 `543586ac1`)
 **Tip commit:** `ac7883296` — dev benchmark cleanup atop `1e7459a6e`
 **Environment:** WSL2 Ubuntu, RTX 4060 Laptop, `.venv_wsl`
 

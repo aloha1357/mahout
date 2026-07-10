@@ -194,7 +194,8 @@ fn main() {
     // Priority: CUDA_PATH env var > /usr/local/cuda (default Linux location)
     let cuda_path = env::var("CUDA_PATH").unwrap_or_else(|_| "/usr/local/cuda".to_string());
 
-    println!("cargo:rustc-link-search=native={}/lib64", cuda_path);
+    println!("cargo:rustc-link-arg=-L{}/lib64", cuda_path);
+    println!("cargo:rustc-link-arg=-Wl,-rpath-link={}/lib64", cuda_path);
     println!("cargo:rustc-link-lib=cudart");
 
     // On macOS, also check /usr/local/cuda/lib

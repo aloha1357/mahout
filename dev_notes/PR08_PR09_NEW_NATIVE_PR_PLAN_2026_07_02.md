@@ -1,8 +1,8 @@
 # PR8 / PR9 Native Fused IQP — New PR Plan
 
-**Date:** 2026-07-02  
-**Context:** after PR #1387 reviewer remediation push  
-**Current PR #1387 tip:** `6497bbbe7` (`fix(qdp): complete TC path reviewer remediation`)  
+**Date:** 2026-07-02
+**Context:** after PR #1387 reviewer remediation push
+**Current PR #1387 tip:** `6497bbbe7` (`fix(qdp): complete TC path reviewer remediation`)
 **Purpose:** plan a new, independent PR for Native/Fused IQP work.
 
 Related spec:
