@@ -23,6 +23,8 @@ The PyTorch reference backend must be explicitly selected via
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -84,6 +86,35 @@ class TestBackendDetection:
 
         t = get_torch()
         assert t is not None  # torch is available in test env
+
+    def test_is_cuda_available_returns_bool(self):
+        """is_cuda_available() returns a plain bool without crashing.
+
+        On a stub build (the extension built without the CUDA toolkit) or a host
+        with no device it must be False -- and querying it must NOT abort the
+        process, which is the regression this guards (a stub build previously
+        aborted when GPU code ran).
+        """
+        from qumat_qdp import is_cuda_available
+
+        assert isinstance(is_cuda_available(), bool)
+
+    def test_is_cuda_available_matches_extension(self):
+        """The helper mirrors the native ``_qdp.cuda_available()`` signal."""
+        from qumat_qdp import is_cuda_available
+
+        try:
+            import _qdp
+        except ImportError:
+            assert is_cuda_available() is False
+        else:
+            probe = getattr(_qdp, "cuda_available", None)
+            if probe is None and hasattr(_qdp, "_qdp"):
+                probe = getattr(_qdp._qdp, "cuda_available", None)
+            if probe is None:
+                assert is_cuda_available() is False
+            else:
+                assert is_cuda_available() == bool(probe())
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +184,7 @@ class TestLoaderPytorchBackend:
         )
         batches = list(loader)
         assert len(batches) == 2
-        assert batches[0].shape == (4, 8)
+        assert cast("torch.Tensor", batches[0]).shape == (4, 8)
 
     def test_synthetic_pytorch_basis(self):
         from qumat_qdp.loader import QuantumDataLoader
@@ -169,7 +200,7 @@ class TestLoaderPytorchBackend:
         batches = list(loader)
         assert len(batches) == 2
         for b in batches:
-            assert b.shape == (3, 4)
+            assert cast("torch.Tensor", b).shape == (3, 4)
 
     def test_file_npy_pytorch(self, tmp_path):
         import numpy as np
@@ -221,7 +252,7 @@ class TestLoaderPytorchBackend:
         )
         batches = list(loader)
         assert len(batches) == 2
-        assert batches[0].shape == (4, 8)
+        assert cast("torch.Tensor", batches[0]).shape == (4, 8)
 
     def test_synthetic_pytorch_iqp_z(self):
         from qumat_qdp.loader import QuantumDataLoader
@@ -236,7 +267,7 @@ class TestLoaderPytorchBackend:
         )
         batches = list(loader)
         assert len(batches) == 2
-        assert batches[0].shape == (4, 8)
+        assert cast("torch.Tensor", batches[0]).shape == (4, 8)
 
     def test_file_pt_pytorch(self, tmp_path):
         from qumat_qdp.loader import QuantumDataLoader

@@ -26,9 +26,9 @@
 use std::env;
 use std::process::Command;
 
-const DEFAULT_CUBIN_ARCHES: &[&str] = &["75", "80", "86", "89", "90", "100", "120"];
-const DEFAULT_PTX_CANDIDATES: &[&str] = &["120", "100", "90", "89", "86", "80", "75"];
-const LEGACY_FALLBACK_ARCHES: &[&str] = &["75", "80", "86"];
+const DEFAULT_CUBIN_ARCHES: &[&str] = &["80", "86", "89", "90", "100", "120"];
+const DEFAULT_PTX_CANDIDATES: &[&str] = &["120", "100", "90", "89", "86", "80"];
+const LEGACY_FALLBACK_ARCHES: &[&str] = &["80", "86"];
 
 fn add_sm_target(build: &mut cc::Build, arch: &str) {
     build.flag("-gencode");
@@ -164,9 +164,13 @@ fn main() {
     println!("cargo:rerun-if-changed=src/angle.cu");
     println!("cargo:rerun-if-changed=src/validation.cu");
     println!("cargo:rerun-if-changed=src/iqp.cu");
+    println!("cargo:rerun-if-changed=src/iqp_tc.cu");
     println!("cargo:rerun-if-changed=src/phase.cu");
     println!("cargo:rerun-if-env-changed=QDP_NO_CUDA");
     println!("cargo:rerun-if-env-changed=QDP_CUDA_ARCH_LIST");
+    // The whole CUDA-vs-stub decision hinges on finding nvcc on PATH, so a PATH
+    // change (e.g. installing the toolkit) must re-trigger this script.
+    println!("cargo:rerun-if-env-changed=PATH");
     println!("cargo:rerun-if-changed=src/kernel_config.h");
 
     // Check if CUDA is available by looking for nvcc
@@ -174,7 +178,12 @@ fn main() {
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes"))
         .unwrap_or(false);
 
-    let has_cuda = !force_no_cuda && Command::new("nvcc").arg("--version").output().is_ok();
+    let has_cuda = !force_no_cuda
+        && Command::new("nvcc")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
 
     if !has_cuda {
         // Expose a cfg for conditional compilation of stub symbols on Linux.
@@ -224,6 +233,8 @@ fn main() {
         .file("src/angle.cu")
         .file("src/validation.cu")
         .file("src/iqp.cu")
+        .file("src/iqp_tc.cu")
+        .file("src/ImplicitHadamardOzaki.cu")
         .file("src/phase.cu")
         .compile("kernels");
 }

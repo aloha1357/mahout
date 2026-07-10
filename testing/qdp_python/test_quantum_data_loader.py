@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -38,7 +38,8 @@ def _loader_available():
 def _require_loader_cls() -> type[QuantumDataLoaderType]:
     if QuantumDataLoader is None:
         pytest.skip("QuantumDataLoader not available")
-    return cast("type[QuantumDataLoaderType]", QuantumDataLoader)
+    assert QuantumDataLoader is not None
+    return QuantumDataLoader
 
 
 @pytest.fixture
@@ -92,6 +93,7 @@ def test_source_file_empty_path_raises(loader_cls: type[QuantumDataLoaderType]):
 
 
 @pytest.mark.skipif(not _loader_available(), reason="QuantumDataLoader not available")
+@pytest.mark.gpu
 def test_synthetic_loader_batch_count(loader_cls: type[QuantumDataLoaderType]):
     """Synthetic loader yields exactly total_batches batches."""
     total = 5

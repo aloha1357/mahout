@@ -93,6 +93,14 @@ class QdpEngine:
         precision: str = "float32",
         backend: str = "cuda",
     ) -> None:
+        """Create a backend-selecting QDP engine facade.
+
+        :param device_id: GPU device ordinal to use.
+        :param precision: Numeric precision requested from the backend.
+        :param backend: Backend selector, either ``"cuda"``, ``"amd"``, or
+            ``"triton_amd"``.
+        :raises ValueError: If ``backend`` is not supported.
+        """
         self.device_id = device_id
         self.precision = precision
         self.backend, self._engine_adapter = _select_engine_adapter(
@@ -118,3 +126,17 @@ class QdpEngine:
         :raises ValueError: If the backend does not support ``encoding_method``.
         """
         return self._engine_adapter.encode(data, num_qubits, encoding_method)
+
+    def encode_batch_tc(
+        self,
+        data: Any,
+        num_qubits: int,
+        encoding_method: str = "iqp",
+    ) -> Any:
+        """Encode a batch of IQP samples via the Tensor Core / Kronecker FWT path."""
+        encode_tc = getattr(self._engine_adapter, "encode_batch_tc", None)
+        if encode_tc is None:
+            raise RuntimeError(
+                "encode_batch_tc is unavailable. Rebuild with CUDA on Linux/WSL."
+            )
+        return encode_tc(data, num_qubits, encoding_method)
