@@ -1,5 +1,22 @@
 # PR011 and Current State Handover
 
+## Environment Repair Status (2026-07-10)
+
+The local WSL GPU environment is only partially restored.
+
+- Ubuntu access works, but in Codex/sandbox sessions it must be launched via
+  `C:\Users\aloha\AppData\Local\Microsoft\WindowsApps\ubuntu.exe`
+- `.venv_wsl` was rebuilt and `torch 2.9.0+cu128` imports successfully
+- GPU pytest is still blocked by `_qdp` loading a conflicting CUDA runtime
+  before `torch`
+
+See:
+
+- `dev_notes/WSL_GPU_ENVIRONMENT_REPAIR_HANDOVER_2026_07_10.md`
+
+Do not assume the environment is fully healthy until `python -m pytest
+testing/qdp/test_bindings.py -q` passes again inside WSL.
+
 ## Current Status
 We have completed the Native FP32 Fast Walsh-Hadamard Transform (FWT) pipeline implementation and benchmarked it against the highly optimized `Dao-AILab/fast-hadamard-transform` (Dao FHT).
 The results and analysis are documented in `PR011_NATIVE_FP32_PIPELINE.md`.
