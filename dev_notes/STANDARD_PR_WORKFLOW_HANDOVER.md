@@ -103,6 +103,39 @@ bash check_env.sh
 # Expect: torch 2.9.0+cu*, cuda: True, pre-commit + pytest available
 ```
 
+### Codex / non-interactive Windows session note
+
+In some Codex or sandboxed Windows sessions, `wsl.exe` runs under a different
+Windows user context than the interactive desktop user. In that case:
+
+- `wsl -l -v` may report no default distro
+- `wsl.exe` may fail with `WSL_E_DEFAULT_DISTRO_NOT_FOUND`
+- but the interactive user's Ubuntu distro still exists and works normally
+
+If this happens, launch Ubuntu via the interactive user's WindowsApps alias
+instead of `wsl.exe`:
+
+```powershell
+C:\Users\aloha\AppData\Local\Microsoft\WindowsApps\ubuntu.exe run bash -lc "uname -a"
+```
+
+For repo commands, use the same entrypoint:
+
+```powershell
+C:\Users\aloha\AppData\Local\Microsoft\WindowsApps\ubuntu.exe run bash -lc "
+cd /mnt/d/D_backup/2025/tum/26S/apache_mout &&
+export UV_PROJECT_ENVIRONMENT=\$PWD/.venv_wsl &&
+export VIRTUAL_ENV=\$PWD/.venv_wsl &&
+export LIBTORCH_USE_PYTORCH=1 &&
+export PATH=/usr/local/cuda/bin:\$PWD/.venv_wsl/bin:\$PATH &&
+python -m pytest testing/qdp/test_bindings.py -q
+"
+```
+
+If `setup_wsl_env.sh` / `check_env.sh` exist on the current branch, prefer
+those helpers. If they only exist on `internal-dev-notes`, mirror their env
+variables inline as above.
+
 ### Common fixes (learned from PR2 rework)
 
 | Symptom | Fix |
